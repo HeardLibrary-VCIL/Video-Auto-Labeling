@@ -1,0 +1,4 @@
+# Dependencies are provided by the shared Lambda Layer.
+# Do not add packages here — they will be bundled into the function zip
+# and may exceed the 250MB limit.
+# Edit backend/layers/dependencies/requirements.txt instead.

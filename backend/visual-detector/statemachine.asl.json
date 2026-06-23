@@ -1,0 +1,76 @@
+{
+  "Comment": "Batch visual boundary detection: process videos in parallel",
+  "StartAt": "ProcessVideos",
+  "States": {
+    "ProcessVideos": {
+      "Type": "Map",
+      "ItemsPath": "$.videos",
+      "MaxConcurrency": 10,
+      "Iterator": {
+        "StartAt": "ProcessChunks",
+        "States": {
+          "ProcessChunks": {
+            "Type": "Map",
+            "ItemsPath": "$.chunks",
+            "MaxConcurrency": 20,
+            "ItemSelector": {
+              "s3_bucket.$": "$.s3_bucket",
+              "s3_key.$": "$.s3_key",
+              "chunk_id.$": "$$.Map.Item.Value.chunk_id"
+            },
+            "Iterator": {
+              "StartAt": "InvokeWorker",
+              "States": {
+                "InvokeWorker": {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::lambda:invoke",
+                  "Parameters": {
+                    "FunctionName": "${WorkerFunctionArn}",
+                    "Payload.$": "$"
+                  },
+                  "ResultSelector": {
+                    "chunk_id.$": "$.Payload.chunk_id",
+                    "start_sec.$": "$.Payload.start_sec",
+                    "end_sec.$": "$.Payload.end_sec",
+                    "boundary_runs.$": "$.Payload.boundary_runs"
+                  },
+                  "Retry": [
+                    {
+                      "ErrorEquals": ["States.TaskFailed", "Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+                      "IntervalSeconds": 10,
+                      "MaxAttempts": 3,
+                      "BackoffRate": 2
+                    }
+                  ],
+                  "End": true
+                }
+              }
+            },
+            "ResultPath": "$.chunk_results",
+            "Next": "MergeResults"
+          },
+          "MergeResults": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "${MergerFunctionArn}",
+              "Payload": {
+                "video_name.$": "$.video_name",
+                "s3_bucket.$": "$.s3_bucket",
+                "s3_key.$": "$.s3_key",
+                "chunk_results.$": "$.chunk_results"
+              }
+            },
+            "ResultSelector": {
+              "video.$": "$.Payload.video",
+              "segments_count.$": "$.Payload.segments_count",
+              "result_key.$": "$.Payload.result_key"
+            },
+            "End": true
+          }
+        }
+      },
+      "End": true
+    }
+  }
+}

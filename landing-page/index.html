@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TV News Auto-Labeling Pipeline</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="#" class="nav-logo">TV News Auto-Labeling</a>
+      <ul class="nav-links">
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#backend">Backend</a></li>
+        <li><a href="#algorithm">Algorithm</a></li>
+        <li><a href="#transcription">Transcription AI</a></li>
+        <li><a href="#frontend">Frontend</a></li>
+        <li><a href="#dataflow">Data Flow</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="hero-content">
+      <h1>TV News Auto-Labeling Pipeline</h1>
+      <p class="hero-subtitle">Automated detection of commercial breaks, news segments, and teasers in TV news broadcasts using black frame analysis, AI transcript segmentation, and AWS serverless architecture</p>
+      <div class="hero-badges">
+        <span class="badge">AWS Lambda</span>
+        <span class="badge">Step Functions</span>
+        <span class="badge">OpenCV</span>
+        <span class="badge">Bedrock</span>
+        <span class="badge">Claude</span>
+        <span class="badge">React</span>
+        <span class="badge">Amplify</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Overview Section -->
+    <section id="overview" class="section">
+      <div class="container">
+        <h2>Project Overview</h2>
+        <p>This system automatically identifies commercial break segments within hour-long TV news broadcasts from MSNBC, CNN, and Fox News. It uses computer vision to detect the black frames that bookend commercial breaks, then pairs them into segments using timing heuristics based on standard commercial break durations.</p>
+        
+        <div class="feature-grid">
+          <div class="feature-card">
+            <div class="feature-icon">🎬</div>
+            <h3>Video Processing</h3>
+            <p>Processes hour-long broadcasts by splitting them into 60-second chunks analyzed in parallel across dozens of Lambda workers.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🔍</div>
+            <h3>Black Frame Detection</h3>
+            <p>Uses color histogram analysis to identify black frames with high accuracy, distinguishing true commercial boundaries from dark scenes.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🧩</div>
+            <h3>Intelligent Pairing</h3>
+            <p>Pairs detected black frame events into commercial segments using standard duration heuristics (multiples of 30 seconds).</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>Interactive Results</h3>
+            <p>Web application for viewing, editing, and validating segmentation results with timeline visualization and video playback.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Backend Section -->
+    <section id="backend" class="section section-alt">
+      <div class="container">
+        <h2>Backend Architecture</h2>
+        <p>The processing pipeline runs entirely on AWS serverless infrastructure, deployed with SAM (Serverless Application Model).</p>
+
+        <div class="architecture-diagram">
+          <div class="arch-step">
+            <div class="arch-number">1</div>
+            <div class="arch-content">
+              <h4>Batch Orchestrator</h4>
+              <p class="arch-tech">Shell Script + AWS CLI</p>
+              <p>Lists all .mp4 videos in S3, groups them into batches of 20 (to stay under Step Functions' 25K event limit), and invokes the Launcher Lambda for each batch.</p>
+            </div>
+          </div>
+          <div class="arch-arrow">↓</div>
+          <div class="arch-step">
+            <div class="arch-number">2</div>
+            <div class="arch-content">
+              <h4>Launcher Lambda</h4>
+              <p class="arch-tech">Python + Boto3</p>
+              <p>Scans the S3 bucket for video files, builds chunk definitions (each video divided into 60-second chunks starting at the 5-minute mark), and starts a Step Functions execution.</p>
+            </div>
+          </div>
+          <div class="arch-arrow">↓</div>
+          <div class="arch-step">
+            <div class="arch-number">3</div>
+            <div class="arch-content">
+              <h4>Step Functions State Machine</h4>
+              <p class="arch-tech">AWS Step Functions (Nested Map)</p>
+              <p>Orchestrates parallel processing: outer Map iterates videos (20 concurrent), inner Map iterates chunks per video (40 concurrent workers). Includes retry logic with exponential backoff.</p>
+            </div>
+          </div>
+          <div class="arch-arrow">↓</div>
+          <div class="arch-step">
+            <div class="arch-number">4</div>
+            <div class="arch-content">
+              <h4>Worker Lambda</h4>
+              <p class="arch-tech">Python + OpenCV (Docker, ARM64)</p>
+              <p>Reads a 60-second chunk of video via presigned URL. Performs coarse 1fps black frame scan, then refines detections to frame-accurate boundaries. Returns timestamped black frame runs.</p>
+            </div>
+          </div>
+          <div class="arch-arrow">↓</div>
+          <div class="arch-step">
+            <div class="arch-number">5</div>
+            <div class="arch-content">
+              <h4>Merger Lambda</h4>
+              <p class="arch-tech">Python + Boto3</p>
+              <p>Collects all chunk results, merges adjacent runs, extracts discrete events, pairs them into commercial segments, probes for missing partners, and writes final results to S3 and DynamoDB.</p>
+            </div>
+          </div>
+        </div>
+
+        <h3>Infrastructure Resources</h3>
+        <div class="resource-grid">
+          <div class="resource-card">
+            <h4>S3 Bucket</h4>
+            <p>Stores source videos (<code>video/</code>) and processing results (<code>results/</code>). Videos organized by network in subfolders.</p>
+          </div>
+          <div class="resource-card">
+            <h4>DynamoDB Tables</h4>
+            <p>Three tables: chunk results, per-video segment results (video_name + timestamp), and evaluation summaries.</p>
+          </div>
+          <div class="resource-card">
+            <h4>Lambda Functions</h4>
+            <p>Containerized (Docker) on ARM64. Worker: 2GB RAM, 5 min timeout. Merger: 512MB, 15 min timeout. Launcher: 256MB, 1 min.</p>
+          </div>
+          <div class="resource-card">
+            <h4>Step Functions</h4>
+            <p>Standard workflow with nested Map states. Processes up to 800 chunks concurrently (20 videos × 40 chunks).</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Algorithm Section -->
+    <section id="algorithm" class="section">
+      <div class="container">
+        <h2>Detection Algorithm</h2>
+        
+        <div class="algo-section">
+          <h3>Step 1: Black Frame Detection (Worker)</h3>
+          <p>Each 60-second chunk is analyzed for black frame runs using color histogram comparison:</p>
+          <div class="code-block">
+            <pre><code>1. Compute 32-bin color histogram for each frame (RGB channels)
+2. Calculate chi-squared distance from a pure-black reference histogram
+3. If distance &lt; 0.3 → confirmed black frame
+4. If distance &lt; 8.0 → suspicious (may be very dark scene)
+5. Refine coarse detections to frame-accurate start/end timestamps</code></pre>
+          </div>
+          <p>For normal chunks, a coarse 1fps scan finds candidates, then a frame-by-frame refinement pass in ±2s windows determines precise boundaries. Short probe windows (≤15s) use frame-by-frame scanning directly.</p>
+        </div>
+
+        <div class="algo-section">
+          <h3>Step 2: Event Extraction (Merger)</h3>
+          <p>Black frame runs from all chunks are merged and converted into discrete "events":</p>
+          <div class="code-block">
+            <pre><code>1. Merge adjacent runs across chunk boundaries (gap &lt; 0.1s)
+2. Filter runs shorter than 0.1s (noise)
+3. Extract events: runs separated by ≥15 seconds become distinct events
+4. Remove events in first 5 minutes and last 60 seconds (margins)</code></pre>
+          </div>
+        </div>
+
+        <div class="algo-section">
+          <h3>Step 3: Commercial Segment Pairing (Merger)</h3>
+          <p>Events are paired into commercial segments using duration heuristics:</p>
+          <div class="code-block">
+            <pre><code>1. For each unpaired event, find the best partner where:
+   - Duration is between 90s and 300s (1.5 to 5 minutes)
+   - Duration is closest to a standard multiple of 30s
+2. Remove "interior" events (black frames within paired segments)
+3. Re-pair after cleanup
+4. Probe for missing partners at standard offsets (30s, 60s, ..., 300s)
+5. Short segments (&lt;90s) → attempt to extend from endpoints
+6. Final cleanup: merge overlaps, remove contained segments</code></pre>
+          </div>
+        </div>
+
+        <div class="algo-section">
+          <h3>Key Design Decisions</h3>
+          <ul class="design-list">
+            <li><strong>5-minute margin:</strong> First 300s of each broadcast is skipped (pre-show content, network bumpers)</li>
+            <li><strong>Histogram-based detection:</strong> More robust than simple pixel averaging — handles noise, compression artifacts, and near-black scenes</li>
+            <li><strong>Standard duration matching:</strong> Commercial breaks are reliably multiples of 30 seconds, providing a strong pairing heuristic</li>
+            <li><strong>Active probing:</strong> When events can't be paired from the initial scan, targeted Lambda invocations search for missing partners at expected offsets</li>
+            <li><strong>60-second chunks:</strong> Balances Lambda execution time against parallelism and Step Functions event limits</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Frontend Section -->
+    <section id="frontend" class="section section-alt">
+      <div class="container">
+        <h2>Frontend Application</h2>
+        <p>The web application is built with React + TypeScript + Vite, deployed on AWS Amplify Gen 2.</p>
+
+        <div class="frontend-stack">
+          <h3>Technology Stack</h3>
+          <div class="stack-grid">
+            <div class="stack-item">
+              <strong>Framework:</strong> React 18 + TypeScript
+            </div>
+            <div class="stack-item">
+              <strong>Build:</strong> Vite
+            </div>
+            <div class="stack-item">
+              <strong>Hosting:</strong> AWS Amplify
+            </div>
+            <div class="stack-item">
+              <strong>Auth:</strong> Cognito (email login)
+            </div>
+            <div class="stack-item">
+              <strong>Storage:</strong> S3 via Amplify Storage
+            </div>
+            <div class="stack-item">
+              <strong>API:</strong> AppSync GraphQL
+            </div>
+          </div>
+        </div>
+
+        <h3>Key Pages</h3>
+        <div class="page-cards">
+          <div class="page-card">
+            <h4>📹 Video Select</h4>
+            <p>Browse and search videos by network (MSNBC, CNN, FNC). Lists all available broadcasts from S3 storage with network filtering and search. Preview video before selecting for analysis.</p>
+          </div>
+          <div class="page-card">
+            <h4>📊 Results Viewer</h4>
+            <p>Interactive visualization of segmentation results with a color-coded timeline. Click segments to jump to that point in the video. Supports editing segment boundaries, adding/removing segments, and merging adjacent segments.</p>
+          </div>
+          <div class="page-card">
+            <h4>✏️ Edit Mode</h4>
+            <p>Staff can enter edit mode to correct segmentation errors: drag timeline markers, inline-edit timestamps, change segment type labels, merge segments, or add new ones. Edits save back to S3 as timestamped CSV files.</p>
+          </div>
+        </div>
+
+        <h3>Segment Types</h3>
+        <div class="segment-types">
+          <div class="segment-type" style="border-left-color: #A9A9A9;">
+            <span class="seg-label">N</span> News
+          </div>
+          <div class="segment-type" style="border-left-color: #FF6B6B;">
+            <span class="seg-label">C</span> Commercial
+          </div>
+          <div class="segment-type" style="border-left-color: #4ECDC4;">
+            <span class="seg-label">T</span> Tease
+          </div>
+   
+        </div>
+
+        
+      </div>
+    </section>
+
+    <!-- Transcription AI Tool Section -->
+    <section id="transcription" class="section">
+      <div class="container">
+        <h2>Transcription &amp; AI Segmentation Pipeline</h2>
+        <p>A separate automated pipeline uses the commercial detection output as input to an AI-powered transcript segmentation system. This identifies individual news segments (stories, interviews, analysis) within the non-commercial portions of each broadcast.</p>
+
+        <div class="pipeline-overview">
+          <h3>How It Works</h3>
+          <div class="architecture-diagram">
+            <div class="arch-step">
+              <div class="arch-number">1</div>
+              <div class="arch-content">
+                <h4>Video Transcription</h4>
+                <p class="arch-tech">AWS Transcribe Lambda</p>
+                <p>Uploads trigger automatic transcription via AWS Transcribe, producing word-level timestamps for the entire broadcast. Output: JSON with every word and its precise start/end time.</p>
+              </div>
+            </div>
+            <div class="arch-arrow">↓</div>
+            <div class="arch-step">
+              <div class="arch-number">2</div>
+              <div class="arch-content">
+                <h4>Commercial Filtering</h4>
+                <p class="arch-tech">Python (filter_commercials.py)</p>
+                <p>Uses the <code>_segments.json</code> output from the Commercial Segment Detector to remove all words that fall within detected commercial breaks. Inserts <code>[ COMMERCIAL BREAK ]</code> markers as hard boundaries.</p>
+              </div>
+            </div>
+            <div class="arch-arrow">↓</div>
+            <div class="arch-step">
+              <div class="arch-number">3</div>
+              <div class="arch-content">
+                <h4>AI Segmentation</h4>
+                <p class="arch-tech">Amazon Bedrock (Claude Sonnet)</p>
+                <p>The filtered transcript is sent to Claude via Pydantic AI. The model acts as a "Junior Archivist," identifying news segment boundaries by detecting topic changes, anchor handoffs, and reporter transitions. Returns structured segment data with verbatim first/last sentences.</p>
+              </div>
+            </div>
+            <div class="arch-arrow">↓</div>
+            <div class="arch-step">
+              <div class="arch-number">4</div>
+              <div class="arch-content">
+                <h4>Timestamp Matching</h4>
+                <p class="arch-tech">Python (timestamp_matcher.py)</p>
+                <p>Maps the AI-identified segment boundaries (first/last sentences) back to precise video timestamps using the original word-level transcription data. Produces frame-accurate start/end times for each news segment. Output: <code>news_results/{video}_segments.json</code></p>
+              </div>
+            </div>
+            <div class="arch-arrow">↓</div>
+            <div class="arch-step">
+              <div class="arch-number">5</div>
+              <div class="arch-content">
+                <h4>Teaser Detection</h4>
+                <p class="arch-tech">Amazon Bedrock (Claude) + Python</p>
+                <p>Independently loads commercial segments (from VIDEO_BUCKET) and news segments (from PROCESSING_BUCKET). Merges them into a unified N/C timeline and uses Claude to detect teaser speech at N→C transitions. Output: <code>teaser_results/{video}_with_teasers.json</code></p>
+              </div>
+            </div>
+            <div class="arch-arrow">↓</div>
+            <div class="arch-step">
+              <div class="arch-number">6</div>
+              <div class="arch-content">
+                <h4>Evaluation</h4>
+                <p class="arch-tech">Python (evaluation_metrics.py)</p>
+                <p>Compares predicted segments against human-annotated ground truth using frame accuracy, segment F1 at multiple IoU thresholds, boundary F1 at multiple tolerances, and normalized edit distance. Runs before the merger to ensure evaluation data is available.</p>
+              </div>
+            </div>
+            <div class="arch-arrow">↓</div>
+            <div class="arch-step">
+              <div class="arch-number">7</div>
+              <div class="arch-content">
+                <h4>Results Merger</h4>
+                <p class="arch-tech">Python + Boto3</p>
+                <p>Uses the teaser JSON as the authoritative timeline. Enriches N segments with titles from AI segmentation and full transcripts from the transcription bucket. Falls back to combining separate sources only if teaser JSON doesn't exist. Output: <code>result/{video}.json</code></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h3>Connection to Commercial Detection</h3>
+        <div class="connection-diagram">
+          <div class="conn-box conn-source">
+            <h4>Commercial Segment Detector</h4>
+            <p>Outputs: <code>commercial_results/{video}_segments.json</code></p>
+            <p class="conn-detail">Black frame analysis → commercial break timestamps</p>
+          </div>
+          <div class="conn-arrow">↘</div>
+          <div class="conn-box conn-consumer">
+            <h4>Teaser Detector</h4>
+            <p>Inputs: commercial segments + news segments</p>
+            <p>Merges both into unified N/C timeline</p>
+            <p class="conn-detail">Detects teaser speech at N→C transitions</p>
+            <p>Outputs: <code>teaser_results/{video}_with_teasers.json</code></p>
+          </div>
+          <div class="conn-arrow">↗</div>
+          <div class="conn-box conn-source">
+            <h4>AI Segmentation</h4>
+            <p>Outputs: <code>news_results/{video}_segments.json</code></p>
+            <p class="conn-detail">Claude transcript analysis → news segment boundaries</p>
+          </div>
+        </div>
+        <h3>AI Segmentation Approach</h3>
+        <div class="algo-section">
+          <p>The system uses Claude (via Amazon Bedrock) with a carefully crafted archival prompt that instructs the model to:</p>
+          <ul class="design-list">
+            <li><strong>Respect hard boundaries:</strong> <code>[ COMMERCIAL BREAK ]</code> markers are absolute — no segment spans across them</li>
+            <li><strong>Identify natural transitions:</strong> Anchor handoffs, reporter sign-offs, topic changes, and shifts in focus</li>
+            <li><strong>Extract verbatim sentences:</strong> First and last sentences of each segment are extracted word-for-word for precise timestamp matching</li>
+            <li><strong>Maintain continuity:</strong> Panel discussions that shift topics stay as one segment; same-story coverage across speakers stays unified</li>
+            <li><strong>Complete coverage:</strong> Every part of the transcript must be assigned to a segment with no gaps</li>
+          </ul>
+        </div>
+
+        <h3>Evaluation Metrics</h3>
+        <div class="resource-grid">
+          <div class="resource-card">
+            <h4>Frame Accuracy</h4>
+            <p>Per-second classification accuracy — what percentage of seconds are correctly assigned to the right segment type.</p>
+          </div>
+          <div class="resource-card">
+            <h4>Segment F1</h4>
+            <p>Measures segment detection at IoU thresholds (0.25, 0.5, 0.75). A predicted segment must overlap sufficiently with ground truth to count as a match.</p>
+          </div>
+          <div class="resource-card">
+            <h4>Boundary F1</h4>
+            <p>Measures boundary detection accuracy at multiple tolerances (2s, 5s, 10s). How close are predicted boundaries to actual segment transitions?</p>
+          </div>
+          <div class="resource-card">
+            <h4>Edit Distance</h4>
+            <p>Normalized edit distance between predicted and ground truth segment type sequences — captures ordering and structural errors.</p>
+          </div>
+        </div>
+
+        <h3>Cost &amp; Performance</h3>
+        <div class="code-block">
+          <pre><code>Per 1-hour broadcast:
+├── Video processing to find commercial breaks free-tier Lambda or $.035/10 videos           
+├── Transcription (AWS Transcribe): ~$0.72, 3-5 min
+├── AI Segmentation (Bedrock Claude): ~$0.60-$0.80, 2-4 min
+└── Evaluation: ~$0.01, 30 sec
+Total: ~$1.50, 6-10 minutes end-to-end</code></pre>
+        </div>
+
+        <h3>Serverless Deployment</h3>
+        <p>The pipeline deploys as event-driven Lambda functions connected by S3 triggers:</p>
+        <div class="code-block">
+          <pre><code>Upload video to S3
+  → [S3 trigger] → TVNewsTranscriptionLambda (AWS Transcribe)
+    → [Readiness Checker] → tv-news-segmentation (Bedrock Claude)
+      → news_results/{video}_segments.json
+        → [S3 trigger on news_results/] → Fanout → tv-news-teaser-detector
+          (loads commercial_results/ from VIDEO_BUCKET + news_results/ from PROCESSING_BUCKET)
+          → teaser_results/{video}_with_teasers.json
+            → [S3 trigger on .json suffix] → Evaluation (first)
+              → Results Merger (enriches with titles + transcripts)
+                → result/{video}.json → Web UI</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Data Flow Section -->
+    <section id="dataflow" class="section">
+      <div class="container">
+        <h2>End-to-End Data Flow</h2>
+        <div class="flow-diagram">
+          <div class="flow-step">
+            <div class="flow-icon">📤</div>
+            <div class="flow-text">
+              <h4>1. Video Upload</h4>
+              <p>Hour-long TV news broadcasts (.mp4) are uploaded to S3 organized by network (MSNBC/, CNN/, FNC/)</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">🚀</div>
+            <div class="flow-text">
+              <h4>2. Batch Launch</h4>
+              <p><code>run_batches.sh</code> lists videos, groups into batches of 20, invokes the Launcher Lambda for each batch</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">⚡</div>
+            <div class="flow-text">
+              <h4>3. Parallel Processing</h4>
+              <p>Step Functions fans out: up to 800 concurrent Worker invocations scanning for black frames in 60s chunks</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">🔗</div>
+            <div class="flow-text">
+              <h4>4. Merge &amp; Pair</h4>
+              <p>Merger Lambda collects results, pairs black frame events into commercial segments, probes for missing boundaries</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">💾</div>
+            <div class="flow-text">
+              <h4>5. Store Commercial Results</h4>
+              <p>Commercial segments written to S3 (<code>commercial_results/{video}_segments.json</code>) and DynamoDB.</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">📝</div>
+            <div class="flow-text">
+              <h4>6. Transcription &amp; AI Segmentation</h4>
+              <p>Videos are transcribed (AWS Transcribe), commercial speech is filtered out using the detected segments, and Claude identifies individual news story boundaries. Output: <code>news_results/{video}_segments.json</code></p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">🎯</div>
+            <div class="flow-text">
+              <h4>7. Teaser Detection</h4>
+              <p>Teaser Detector loads both commercial and news segments, merges into a unified N/C timeline, and detects teaser speech at N→C transitions. Output: <code>teaser_results/{video}_with_teasers.json</code></p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">📊</div>
+            <div class="flow-text">
+              <h4>8. Evaluation &amp; Merge</h4>
+              <p>Evaluation runs first (compares to ground truth), then Results Merger produces unified JSON enriched with segment titles and full transcripts. Output: <code>result/{video}.json</code></p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">🌐</div>
+            <div class="flow-text">
+              <h4>9. Visualization</h4>
+              <p>Staff access the web app, select a video, view detected segments on an interactive timeline, and correct any errors</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">✅</div>
+            <div class="flow-text">
+              <h4>10. Validation</h4>
+              <p>Human-corrected annotations saved back to S3 for ground truth building and model evaluation</p>
+            </div>
+          </div>
+        </div>
+
+        <h3>Output Format</h3>
+        <div class="code-block">
+          <pre><code>{
+  "video": "20240801MSNBC",
+  "segments": [
+    {
+      "segment_start": 300.0,
+      "segment_end": 991.832,
+      "segment_type": "N",
+      "label": "News",
+      "title": "Breaking: Senate votes on infrastructure bill",
+      "transcript": "Good evening, I'm Rachel Maddow. Tonight we begin with..."
+    },
+    {
+      "segment_start": 991.832,
+      "segment_end": 1084.104,
+      "segment_type": "C",
+      "label": "Commercial",
+      "title": null,
+      "transcript": null
+    },
+    {
+      "segment_start": 950.5,
+      "segment_end": 991.832,
+      "segment_type": "T",
+      "label": "Teaser",
+      "title": "Coming up: exclusive interview with...",
+      "transcript": "Still ahead tonight, we have an exclusive..."
+    },
+    ...
+  ]
+}</code></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Vanderbilt TV News Archive — VCIL Research Lab</p>
+      <p class="footer-links">
+        <a href="https://github.com/HeardLibrary-VCIL">GitHub</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

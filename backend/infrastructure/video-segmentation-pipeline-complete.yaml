@@ -1,0 +1,1559 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Video Auto-Labeling Pipeline - Complete Infrastructure
+  Deploys all components: Visual Processing, Transcription AI, Transition Detector,
+  S3 buckets, DynamoDB tables, and event-driven triggers.
+  Final merged results go to VideoBucket/results/ for Amplify frontend consumption.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PARAMETERS
+# ─────────────────────────────────────────────────────────────────────────────
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+    Description: Deployment environment
+
+  ProjectName:
+    Type: String
+    Default: video-autolabeling
+    Description: Project identifier used in resource naming
+
+  VideoBucket:
+    Type: String
+    Default: ''
+    Description: >
+      (Optional) Name for the video bucket. If empty, one will be created automatically
+      as {ProjectName}-videos-{accountId}. Videos are synced here from the source.
+
+  ExternalVideoBucket:
+    Type: String
+    Default: ''
+    Description: >
+      (Optional) External S3 bucket to sync videos FROM.
+      If provided, use: aws s3 sync s3://{ExternalVideoBucket}/video/ s3://{VideoBucket}/video/
+
+  ExternalTranscriptBucket:
+    Type: String
+    Default: ''
+    Description: >
+      (Optional) External bucket containing pre-existing transcripts.
+      If provided, sync into the TranscriptionBucket to trigger the AI segmentation pipeline.
+      Use: aws s3 sync s3://{ExternalTranscriptBucket}/ s3://{TranscriptionBucket}/
+
+  GroundTruthPrefix:
+    Type: String
+    Default: ground_truth/ground_truth.csv
+    Description: S3 key for ground truth CSV within the VideoBucket
+
+  BedrockModelId:
+    Type: String
+    Default: global.anthropic.claude-opus-4-8
+    Description: >
+      Bedrock model ID for AI segmentation and sub-segment detection.
+      Use cross-region inference profile (us. prefix) for production.
+      Must have Anthropic use case form submitted for the model family.
+
+  AmplifyMainBucket:
+    Type: String
+    Default: ''
+    Description: >
+      (Optional) Amplify main branch storage bucket name.
+      Results will be auto-synced here when available.
+
+  AmplifyDevBucket:
+    Type: String
+    Default: ''
+    Description: >
+      (Optional) Amplify dev branch storage bucket name.
+      Results will be auto-synced here when available.
+
+  SegmentTypes:
+    Type: String
+    Default: 'content,commercial,transition'
+    Description: >
+      Comma-separated list of segment type labels used by this pipeline.
+      Customize based on your video domain (e.g., content,commercial,transition,preview).
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONDITIONS
+# ─────────────────────────────────────────────────────────────────────────────
+Conditions:
+  CreateVideoBucket: !Equals [!Ref VideoBucket, '']
+  HasAmplifyBuckets: !Not [!Equals [!Ref AmplifyMainBucket, '']]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GLOBALS
+# ─────────────────────────────────────────────────────────────────────────────
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 2048
+    Architectures:
+      - arm64
+    Tags:
+      Project: !Ref ProjectName
+      Environment: !Ref Environment
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        VIDEO_BUCKET: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RESOURCES
+# ─────────────────────────────────────────────────────────────────────────────
+Resources:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # S3 BUCKETS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # Video storage bucket (created if VideoBucket parameter is empty)
+  VideoStorageBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateVideoBucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-videos-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: storage
+
+  # Transcription bucket (created by this stack)
+  TranscriptionBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-transcriptions-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: transcription
+
+  # Custom vocabulary bucket for AWS Transcribe
+  CustomVocabularyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-vocabulary-${AWS::AccountId}'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: transcription
+
+  # Intermediate processing bucket (segmentation, evaluation, sub-segments)
+  ProcessingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-processing-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: CleanupOldProcessing
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: processing
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # DYNAMODB TABLES
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  SegmentDetectorResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-detector-results-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: segment-detection
+
+  SegmentResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-segment-results-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: video_name
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: video_name
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+
+  EvalResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-eval-results-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: eval_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: eval_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+
+  TranscriptionJobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-transcription-jobs-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: JobID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: JobID
+          KeyType: HASH
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # TRANSCRIPTION (Auto-transcribes videos when uploaded)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  TranscriptionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-transcription-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: TranscriptionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:ListBucket]
+                Resource:
+                  - !If
+                    - CreateVideoBucket
+                    - !Sub '${VideoStorageBucket.Arn}/*'
+                    - !Sub 'arn:aws:s3:::${VideoBucket}/*'
+                  - !If
+                    - CreateVideoBucket
+                    - !GetAtt VideoStorageBucket.Arn
+                    - !Sub 'arn:aws:s3:::${VideoBucket}'
+                  - !Sub '${TranscriptionBucket.Arn}/*'
+                  - !Sub '${TranscriptionBucket.Arn}'
+                  - !Sub '${CustomVocabularyBucket.Arn}/*'
+                  - !Sub '${CustomVocabularyBucket.Arn}'
+              - Effect: Allow
+                Action:
+                  - transcribe:StartTranscriptionJob
+                  - transcribe:GetTranscriptionJob
+                  - transcribe:DeleteTranscriptionJob
+                Resource: !Sub 'arn:aws:transcribe:${AWS::Region}:${AWS::AccountId}:transcription-job/*'
+              - Effect: Allow
+                Action:
+                  - transcribe:GetVocabulary
+                  - transcribe:CreateVocabulary
+                  - transcribe:UpdateVocabulary
+                Resource: !Sub 'arn:aws:transcribe:${AWS::Region}:${AWS::AccountId}:vocabulary/*'
+              - Effect: Allow
+                Action: dynamodb:PutItem
+                Resource: !GetAtt TranscriptionJobsTable.Arn
+
+  TranscriptionFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-transcription-${Environment}'
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Timeout: 300
+      MemorySize: 2048
+      Architectures:
+        - arm64
+      Role: !GetAtt TranscriptionRole.Arn
+      Environment:
+        Variables:
+          OUTPUT_BUCKET: !Ref TranscriptionBucket
+          SOURCE_BUCKET: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
+          VOCAB_BUCKET: !Ref CustomVocabularyBucket
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import time
+
+          s3 = boto3.client("s3")
+          transcribe = boto3.client("transcribe")
+          OUTPUT_BUCKET = os.environ["OUTPUT_BUCKET"]
+
+          SUPPORTED_FORMATS = {
+              "wav": "wav", "mp3": "mp3", "mp4": "mp4",
+              "mov": "mov", "flac": "flac", "ogg": "ogg", "webm": "webm"
+          }
+
+          def wait_for_upload(bucket_name, file_key, max_retries=20):
+              retries = 0
+              while retries < max_retries:
+                  try:
+                      s3.head_object(Bucket=bucket_name, Key=file_key)
+                      return
+                  except Exception as e:
+                      retries += 1
+                      time.sleep(5)
+              raise Exception(f"File {file_key} not fully uploaded after {max_retries} retries")
+
+          def get_media_format(file_key):
+              extension = file_key.split('.')[-1].lower()
+              return SUPPORTED_FORMATS.get(extension, "mp4")
+
+          def lambda_handler(event, context):
+              for record in event["Records"]:
+                  try:
+                      bucket_name = record["s3"]["bucket"]["name"]
+                      file_key = record["s3"]["object"]["key"]
+                      job_id = file_key.split("/")[-1].split(".")[0]
+
+                      wait_for_upload(bucket_name, file_key)
+                      print(f"File {file_key} ready, starting transcription")
+
+                      media_uri = f"s3://{bucket_name}/{file_key}"
+                      media_format = get_media_format(file_key)
+
+                      transcribe.start_transcription_job(
+                          TranscriptionJobName=job_id,
+                          Media={"MediaFileUri": media_uri},
+                          MediaFormat=media_format,
+                          LanguageCode="en-US",
+                          OutputBucketName=OUTPUT_BUCKET,
+                          Settings={"ShowSpeakerLabels": True, "MaxSpeakerLabels": 15}
+                      )
+                      print(f"Started transcription job: {job_id}")
+                  except Exception as e:
+                      print(f"Error processing {file_key}: {e}")
+
+  TranscriptionFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TranscriptionFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !If
+        - CreateVideoBucket
+        - !GetAtt VideoStorageBucket.Arn
+        - !Sub 'arn:aws:s3:::${VideoBucket}'
+
+  # Single S3 trigger on VideoBucket — routes events by prefix
+  VideoBucketTrigger:
+    Type: Custom::S3Notification
+    DependsOn: VideoBucketDispatcherPermission
+    Properties:
+      ServiceToken: !GetAtt S3NotificationManager.Arn
+      BucketName: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
+      LambdaFunctionArn: !GetAtt VideoBucketDispatcher.Arn
+      NotificationId: !Sub 'video-bucket-trigger-${Environment}'
+
+  VideoBucketDispatcher:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-video-dispatcher-${Environment}'
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 60
+      MemorySize: 256
+      Architectures:
+        - arm64
+      Role: !GetAtt PipelineRole.Arn
+      Environment:
+        Variables:
+          TRANSCRIPTION_FUNCTION: !Ref TranscriptionFunction
+          VISUAL_DETECTOR_FUNCTION: !Ref VisualSegmentDetectorLauncher
+          TRANSITION_DETECTOR_FUNCTION: !Ref TransitionDetectorFunction
+          READINESS_FUNCTION: !GetAtt SegmentationReadinessChecker.Arn
+          AMPLIFY_SYNC_FUNCTION: !If [HasAmplifyBuckets, !Ref AmplifySyncFunction, '']
+          VIDEO_BUCKET: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
+          TRANSCRIPTION_BUCKET: !Ref TranscriptionBucket
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+
+          lambda_client = boto3.client('lambda')
+          s3 = boto3.client('s3')
+          TRANSCRIPTION_FUNCTION = os.environ['TRANSCRIPTION_FUNCTION']
+          VISUAL_DETECTOR_FUNCTION = os.environ['VISUAL_DETECTOR_FUNCTION']
+          TRANSITION_DETECTOR_FUNCTION = os.environ.get('TRANSITION_DETECTOR_FUNCTION', '')
+          READINESS_FUNCTION = os.environ['READINESS_FUNCTION']
+          AMPLIFY_SYNC_FUNCTION = os.environ.get('AMPLIFY_SYNC_FUNCTION', '')
+          VIDEO_BUCKET = os.environ['VIDEO_BUCKET']
+          TRANSCRIPTION_BUCKET = os.environ.get('TRANSCRIPTION_BUCKET', '')
+
+          def transcript_exists(video_name):
+              """Check if a transcript already exists for this video."""
+              if not TRANSCRIPTION_BUCKET:
+                  return False
+              try:
+                  resp = s3.list_objects_v2(
+                      Bucket=TRANSCRIPTION_BUCKET, Prefix=video_name, MaxKeys=5
+                  )
+                  for obj in resp.get('Contents', []):
+                      if obj['Key'].endswith('.json'):
+                          return True
+              except Exception:
+                  pass
+              return False
+
+          def handler(event, context):
+              """Route S3 events based on key prefix."""
+              for record in event.get('Records', []):
+                  key = record['s3']['object']['key']
+                  print(f"Dispatching: {key}")
+
+                  # video/*.mp4 → transcription + visual segment detection
+                  if key.startswith('video/') and key.endswith('.mp4'):
+                      video_name = key.split('/')[-1].replace('.mp4', '')
+
+                      # Only transcribe if transcript doesn't already exist
+                      if transcript_exists(video_name):
+                          print(f"  → Transcript already exists for {video_name}, skipping")
+                      else:
+                          lambda_client.invoke(
+                              FunctionName=TRANSCRIPTION_FUNCTION,
+                              InvocationType='Event',
+                              Payload=json.dumps({'Records': [record]}),
+                          )
+                          print(f"  → Transcription triggered for {video_name}")
+
+                      # Route to transition detector or visual detector based on config
+                      if TRANSITION_DETECTOR_FUNCTION:
+                          lambda_client.invoke(
+                              FunctionName=TRANSITION_DETECTOR_FUNCTION,
+                              InvocationType='Event',
+                              Payload=json.dumps({
+                                  's3_bucket': VIDEO_BUCKET,
+                                  's3_key': key,
+                                  'video_name': video_name
+                              }),
+                          )
+                          print(f"  → Transition Detection triggered for {video_name}")
+                      else:
+                          lambda_client.invoke(
+                              FunctionName=VISUAL_DETECTOR_FUNCTION,
+                              InvocationType='Event',
+                              Payload=json.dumps({
+                                  's3_bucket': VIDEO_BUCKET,
+                                  's3_prefix': 'video/',
+                                  'video_names': [video_name]
+                              }),
+                          )
+                          print(f"  → Visual Segment Detection triggered for {video_name}")
+
+                  # segment_results/*_segments.json → readiness check
+                  elif key.startswith('segment_results/') and key.endswith('_segments.json'):
+                      lambda_client.invoke(
+                          FunctionName=READINESS_FUNCTION,
+                          InvocationType='Event',
+                          Payload=json.dumps({'Records': [record]}),
+                      )
+                      print(f"  → Readiness check (segment results)")
+
+                  # result/*.json → sync to Amplify buckets
+                  elif key.startswith('result/') and key.endswith('.json'):
+                      if AMPLIFY_SYNC_FUNCTION:
+                          lambda_client.invoke(
+                              FunctionName=AMPLIFY_SYNC_FUNCTION,
+                              InvocationType='Event',
+                              Payload=json.dumps({'Records': [record]}),
+                          )
+                          print(f"  → Amplify sync")
+
+              return {'statusCode': 200}
+
+  VideoBucketDispatcherPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VideoBucketDispatcher
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !If
+        - CreateVideoBucket
+        - !GetAtt VideoStorageBucket.Arn
+        - !Sub 'arn:aws:s3:::${VideoBucket}'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # IAM ROLES
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-pipeline-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:ListBucket]
+                Resource:
+                  - !If
+                    - CreateVideoBucket
+                    - !Sub '${VideoStorageBucket.Arn}/*'
+                    - !Sub 'arn:aws:s3:::${VideoBucket}/*'
+                  - !If
+                    - CreateVideoBucket
+                    - !GetAtt VideoStorageBucket.Arn
+                    - !Sub 'arn:aws:s3:::${VideoBucket}'
+                  - !Sub '${TranscriptionBucket.Arn}/*'
+                  - !Sub '${TranscriptionBucket.Arn}'
+                  - !Sub '${ProcessingBucket.Arn}/*'
+                  - !Sub '${ProcessingBucket.Arn}'
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource: '*'
+        - PolicyName: LambdaInvoke
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*'
+        - PolicyName: StepFunctionsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                  - states:DescribeExecution
+                Resource: !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:*'
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:PutItem, dynamodb:GetItem, dynamodb:Query, dynamodb:UpdateItem]
+                Resource:
+                  - !GetAtt SegmentDetectorResultsTable.Arn
+                  - !GetAtt SegmentResultsTable.Arn
+                  - !GetAtt EvalResultsTable.Arn
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VISUAL SEGMENT DETECTOR (Black Frame / Scene Change Analysis)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  VisualSegmentDetectorWorker:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-visual-detector-worker-${Environment}'
+      PackageType: Image
+      ImageConfig:
+        Command: ["worker.handler"]
+      MemorySize: 2048
+      Timeout: 300
+      Role: !GetAtt PipelineRole.Arn
+      Tags:
+        Component: visual-detection
+      Environment:
+        Variables:
+          RESULTS_TABLE: !Ref SegmentDetectorResultsTable
+          SEGMENT_RESULTS_TABLE: !Ref SegmentResultsTable
+    Metadata:
+      DockerTag: worker
+      DockerContext: ../visual-segment-detector/lambda
+      Dockerfile: Dockerfile
+
+  VisualSegmentDetectorMerger:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-visual-detector-merger-${Environment}'
+      PackageType: Image
+      ImageConfig:
+        Command: ["merger.handler"]
+      MemorySize: 512
+      Timeout: 900
+      Role: !GetAtt PipelineRole.Arn
+      Tags:
+        Component: visual-detection
+      Environment:
+        Variables:
+          WORKER_FUNCTION_NAME: !Ref VisualSegmentDetectorWorker
+          RESULTS_TABLE: !Ref SegmentDetectorResultsTable
+          SEGMENT_RESULTS_TABLE: !Ref SegmentResultsTable
+    Metadata:
+      DockerTag: merger
+      DockerContext: ../visual-segment-detector/lambda
+      Dockerfile: Dockerfile
+
+  VisualSegmentDetectorLauncher:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-visual-detector-launcher-${Environment}'
+      PackageType: Image
+      ImageConfig:
+        Command: ["launcher.handler"]
+      MemorySize: 256
+      Timeout: 60
+      Role: !GetAtt PipelineRole.Arn
+      Tags:
+        Component: visual-detection
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: !Ref VisualSegmentDetectorStateMachine
+    Metadata:
+      DockerTag: launcher
+      DockerContext: ../visual-segment-detector/lambda
+      Dockerfile: Dockerfile
+
+  VisualSegmentDetectorStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub '${ProjectName}-visual-detector-batch-${Environment}'
+      DefinitionUri: ../visual-segment-detector/lambda/statemachine.asl.json
+      DefinitionSubstitutions:
+        WorkerFunctionArn: !GetAtt VisualSegmentDetectorWorker.Arn
+        MergerFunctionArn: !GetAtt VisualSegmentDetectorMerger.Arn
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref VisualSegmentDetectorWorker
+        - LambdaInvokePolicy:
+            FunctionName: !Ref VisualSegmentDetectorMerger
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # TRANSITION DETECTOR (Alternative visual detection method)
+  # ─────────────────────────────────────────────────────────────────────────
+  TransitionDetectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-transition-detector-${Environment}'
+      PackageType: Image
+      ImageConfig:
+        Command: ["handler.handler"]
+      MemorySize: 3008
+      Timeout: 900
+      EphemeralStorage:
+        Size: 10240
+      Role: !GetAtt PipelineRole.Arn
+      Tags:
+        Component: transition-detection
+      Environment:
+        Variables:
+          VIDEO_BUCKET: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
+          PROFILES_PREFIX: config/profiles/
+          DETECTION_CONFIG_KEY: config/detection_config.json
+    Metadata:
+      DockerTag: transition
+      DockerContext: ../transition-detector/lambda
+      Dockerfile: Dockerfile
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # TRANSCRIPTION AI PIPELINE (Claude-based Segmentation)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # Lambda Layer for AI dependencies (pydantic-ai, boto3, rich, etc.)
+  PipelineDependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub '${ProjectName}-pipeline-deps-${Environment}'
+      Description: AI dependencies for segmentation Lambdas
+      ContentUri: ../Layers/pipeline-deps/
+      CompatibleRuntimes:
+        - python3.12
+      CompatibleArchitectures:
+        - arm64
+      RetentionPolicy: Delete
+    Metadata:
+      BuildMethod: python3.12
+      BuildArchitecture: arm64
+
+  TranscriptionSegmentationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-ai-segmentation-${Environment}'
+      Runtime: python3.12
+      Handler: segment_handler.lambda_handler
+      Role: !GetAtt PipelineRole.Arn
+      Timeout: 900
+      MemorySize: 3008
+      CodeUri: ../transcription-ai/lambda/
+      Tags:
+        Component: ai-segmentation
+      Layers:
+        - !Ref PipelineDependenciesLayer
+      Environment:
+        Variables:
+          OUTPUT_BUCKET: !Ref ProcessingBucket
+          SEGMENT_RESULTS_BUCKET: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
+          TRANSCRIPTION_BUCKET: !Ref TranscriptionBucket
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          SEGMENT_TYPES: !Ref SegmentTypes
+
+  EvaluationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-evaluation-${Environment}'
+      Runtime: python3.12
+      Handler: evaluation_handler.lambda_handler
+      Role: !GetAtt PipelineRole.Arn
+      Timeout: 300
+      MemorySize: 2048
+      CodeUri: ../transcription-ai/lambda/
+      Tags:
+        Component: evaluation
+      Layers:
+        - !Ref PipelineDependenciesLayer
+      Environment:
+        Variables:
+          OUTPUT_BUCKET: !Ref ProcessingBucket
+          GROUND_TRUTH_BUCKET: !Ref ProcessingBucket
+          GROUND_TRUTH_KEY: !Ref GroundTruthPrefix
+          SEGMENTATION_BUCKET: !Ref ProcessingBucket
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SUB-SEGMENT DETECTOR (AI-based sub-segment identification)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  SubSegmentDetectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-subsegment-detector-${Environment}'
+      Runtime: python3.12
+      Handler: lambda_handler.handler
+      Role: !GetAtt PipelineRole.Arn
+      Timeout: 900
+      MemorySize: 3008
+      CodeUri: ../subsegment-detector/lambda/
+      Tags:
+        Component: subsegment-detection
+      Layers:
+        - !Ref PipelineDependenciesLayer
+      Environment:
+        Variables:
+          OUTPUT_BUCKET: !Ref ProcessingBucket
+          PROCESSING_BUCKET: !Ref ProcessingBucket
+          SEGMENTATION_BUCKET: !Ref ProcessingBucket
+          TRANSCRIPTION_BUCKET: !Ref TranscriptionBucket
+          VIDEO_BUCKET: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          SEGMENT_TYPES: !Ref SegmentTypes
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # RESULTS MERGER (Combines all outputs into one JSON per video)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  ResultsMergerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-results-merger-${Environment}'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt PipelineRole.Arn
+      Timeout: 120
+      MemorySize: 512
+      Architectures:
+        - arm64
+      Environment:
+        Variables:
+          VIDEO_BUCKET: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
+          PROCESSING_BUCKET: !Ref ProcessingBucket
+          TRANSCRIPTION_BUCKET: !Ref TranscriptionBucket
+          OUTPUT_PREFIX: result/
+          ENVIRONMENT: !Ref Environment
+          SEGMENT_TYPES: !Ref SegmentTypes
+      Code:
+        ZipFile: |
+          """
+          Results Merger: Combines visual detection, AI segmentation, and sub-segment
+          detection results into a single JSON file per video.
+          Output goes to VideoBucket/results/{videoBaseName}.json for frontend consumption.
+          """
+          import json
+          import os
+          import boto3
+
+          s3 = boto3.client('s3')
+
+          VIDEO_BUCKET = os.environ['VIDEO_BUCKET']
+          PROCESSING_BUCKET = os.environ['PROCESSING_BUCKET']
+          TRANSCRIPTION_BUCKET = os.environ.get('TRANSCRIPTION_BUCKET', '')
+          OUTPUT_PREFIX = os.environ.get('OUTPUT_PREFIX', 'results/')
+
+
+          def get_transcription_data(video_name):
+              """Load transcription JSON from S3 for a video."""
+              if not TRANSCRIPTION_BUCKET:
+                  return None
+              try:
+                  resp = s3.list_objects_v2(
+                      Bucket=TRANSCRIPTION_BUCKET, Prefix=video_name, MaxKeys=10
+                  )
+                  for obj in resp.get('Contents', []):
+                      if obj['Key'].endswith('.json'):
+                          data = json.loads(
+                              s3.get_object(Bucket=TRANSCRIPTION_BUCKET, Key=obj['Key'])['Body'].read()
+                          )
+                          return data
+              except Exception as e:
+                  print(f"Error loading transcription for {video_name}: {e}")
+              return None
+
+
+          def extract_transcript_text(data, start_time, end_time):
+              """Extract transcript text between start_time and end_time."""
+              if not data:
+                  return ''
+              items = data.get('results', {}).get('items', [])
+              words = []
+              recording = False
+              for item in items:
+                  if item.get('type') == 'pronunciation':
+                      t = float(item.get('start_time', 0))
+                      if t >= end_time:
+                          break
+                      if t >= start_time:
+                          recording = True
+                          words.append(' ' + item.get('alternatives', [{}])[0].get('content', ''))
+                  elif item.get('type') == 'punctuation' and recording:
+                      words.append(item.get('alternatives', [{}])[0].get('content', ''))
+              return ''.join(words).strip()
+
+
+          def handler(event, context):
+              print(f"Event: {json.dumps(event, default=str)}")
+
+              for record in event.get('Records', []):
+                  bucket = record['s3']['bucket']['name']
+                  key = record['s3']['object']['key']
+                  process_trigger(bucket, key)
+
+              return {'statusCode': 200}
+
+
+          def get_video_base_name(key):
+              """Extract base video name from various key formats."""
+              filename = os.path.basename(key)
+              # Remove common suffixes
+              for suffix in ['_segments.json', '_with_subsegments.json', '_with_subsegments.csv', '_evaluation.json', '.json', '.csv']:
+                  if filename.endswith(suffix):
+                      filename = filename[:-len(suffix)]
+                      break
+              # Remove timestamp IDs like -1762983519
+              parts = filename.rsplit('-', 1)
+              if len(parts) == 2 and parts[1].isdigit() and len(parts[1]) >= 8:
+                  filename = parts[0]
+              return filename
+
+
+          def process_trigger(bucket, key):
+              """When any processing result arrives, try to merge all available data."""
+              video_name = get_video_base_name(key)
+              if not video_name:
+                  print(f"Could not extract video name from {key}")
+                  return
+
+              print(f"Merging results for video: {video_name}")
+
+              merged = {
+                  'video': video_name,
+                  'segments': [],
+                  'visual_segments': [],
+                  'evaluation': None,
+              }
+
+              # 1. Load visual detection results from VideoBucket
+              segment_key = f'segment_results/{video_name}_segments.json'
+              try:
+                  resp = s3.get_object(Bucket=VIDEO_BUCKET, Key=segment_key)
+                  segment_data = json.loads(resp['Body'].read())
+                  merged['visual_segments'] = segment_data.get('segments', [])
+                  merged['transition_events'] = segment_data.get('transition_events', segment_data.get('black_frame_events', []))
+              except Exception as e:
+                  print(f"No visual detection results found: {e}")
+
+              # 2. Load AI segmentation results from ProcessingBucket
+              try:
+                  resp = s3.list_objects_v2(
+                      Bucket=PROCESSING_BUCKET, Prefix=f'ai_results/{video_name}', MaxKeys=10
+                  )
+                  for obj in resp.get('Contents', []):
+                      if '_segments.json' in obj['Key']:
+                          data = json.loads(
+                              s3.get_object(Bucket=PROCESSING_BUCKET, Key=obj['Key'])['Body'].read()
+                          )
+                          merged['segments'] = data.get('segments', [])
+                          merged['source_file'] = data.get('source_file', '')
+                          break
+              except Exception as e:
+                  print(f"No AI segmentation results found: {e}")
+
+              # 3. Load sub-segment results from ProcessingBucket
+              subsegment_loaded = False
+              subsegment_timeline = []
+              try:
+                  resp = s3.list_objects_v2(
+                      Bucket=PROCESSING_BUCKET, Prefix=f'subsegment_results/{video_name}', MaxKeys=10
+                  )
+                  for obj in resp.get('Contents', []):
+                      if '_with_subsegments.json' in obj['Key']:
+                          subseg_data = json.loads(
+                              s3.get_object(Bucket=PROCESSING_BUCKET, Key=obj['Key'])['Body'].read()
+                          )
+                          subsegment_timeline = subseg_data.get('segments', [])
+                          merged['source_file'] = subseg_data.get('source_file', merged.get('source_file', ''))
+                          subsegment_loaded = True
+                          break
+              except Exception as e:
+                  print(f"No sub-segment results found: {e}")
+
+              # 4. Load evaluation results
+              try:
+                  resp = s3.list_objects_v2(
+                      Bucket=PROCESSING_BUCKET, Prefix=f'evaluation/{video_name}', MaxKeys=10
+                  )
+                  for obj in resp.get('Contents', []):
+                      if '_evaluation.json' in obj['Key']:
+                          data = json.loads(
+                              s3.get_object(Bucket=PROCESSING_BUCKET, Key=obj['Key'])['Body'].read()
+                          )
+                          merged['evaluation'] = data
+                          break
+              except Exception as e:
+                  print(f"No evaluation results found: {e}")
+
+              # 5. Build unified segments array for frontend display
+              all_segments = []
+
+              if subsegment_loaded and subsegment_timeline:
+                  # Use sub-segment timeline directly (already has typed segments with times)
+                  for seg in subsegment_timeline:
+                      seg_type = seg.get('segment_type', 'content')
+                      all_segments.append({
+                          'segment_start': float(seg.get('segment_start', 0)),
+                          'segment_end': float(seg.get('segment_end', 0)),
+                          'segment_type': seg_type,
+                          'label': seg_type,
+                          'title': seg.get('title', ''),
+                          'transcript': seg.get('transcript', ''),
+                      })
+
+                  # Enrich content segments with titles from AI segmentation
+                  ai_content_segments = [
+                      s for s in merged.get('segments', [])
+                      if s.get('segment_type', '') not in ('commercial', 'transition')
+                  ]
+                  transcript_data = get_transcription_data(video_name)
+
+                  for seg in all_segments:
+                      if seg['label'] in ('commercial', 'transition'):
+                          continue
+
+                      seg_start = float(seg['segment_start'])
+
+                      # Find best matching AI segment by closest start time
+                      best_ai = None
+                      best_diff = float('inf')
+                      for ai_seg in ai_content_segments:
+                          ai_start = float(ai_seg.get('segment_start', ai_seg.get('start_time', 0)))
+                          diff = abs(ai_start - seg_start)
+                          if diff < best_diff:
+                              best_diff = diff
+                              best_ai = ai_seg
+
+                      if best_ai and best_diff < 60:
+                          if not seg['title']:
+                              seg['title'] = best_ai.get('title', '')
+
+                      # Extract full transcript if not already present
+                      if not seg.get('transcript'):
+                          start = float(seg['segment_start'])
+                          end = float(seg['segment_end']) if seg['segment_end'] else 0
+                          if transcript_data and start < end:
+                              full_text = extract_transcript_text(transcript_data, start, end)
+                              if full_text:
+                                  seg['transcript'] = full_text
+                          if not seg.get('transcript') and best_ai and best_diff < 60:
+                              seg['transcript'] = best_ai.get('first_sentence', '')
+
+              else:
+                  # Fallback: build from separate sources (no sub-segment data available)
+                  for seg in merged['visual_segments']:
+                      all_segments.append({
+                          'segment_start': seg.get('start_time', 0),
+                          'segment_end': seg.get('end_time', 0),
+                          'segment_type': 'commercial',
+                          'label': 'commercial',
+                          'title': '',
+                      })
+                  for seg in merged.get('segments', []):
+                      all_segments.append({
+                          'segment_start': seg.get('segment_start', seg.get('start_time', 0)),
+                          'segment_end': seg.get('segment_end', seg.get('end_time', 0)),
+                          'segment_type': seg.get('segment_type', 'content'),
+                          'label': seg.get('segment_type', 'content'),
+                          'title': seg.get('title', ''),
+                          'transcript': seg.get('first_sentence', ''),
+                      })
+
+              # Sort by start time
+              all_segments.sort(key=lambda s: float(s.get('segment_start', 0)))
+
+              # 6. Write merged result to VideoBucket/result/
+              output = {
+                  'video': video_name,
+                  'source_file': merged.get('source_file', ''),
+                  'segments': all_segments,
+                  'transition_events': merged.get('transition_events', []),
+                  'evaluation': merged.get('evaluation'),
+              }
+
+              output_key = f'{OUTPUT_PREFIX}{video_name}.json'
+              s3.put_object(
+                  Bucket=VIDEO_BUCKET,
+                  Key=output_key,
+                  Body=json.dumps(output, indent=2),
+                  ContentType='application/json',
+              )
+              print(f"Merged results written to s3://{VIDEO_BUCKET}/{output_key}")
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # S3 EVENT TRIGGERS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # READINESS CHECKER (Triggers AI segmentation only when BOTH inputs exist)
+  # AI Segmentation needs: transcript + visual detection results
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # Trigger readiness check when transcript arrives
+  TranscriptionTriggerNotification:
+    Type: Custom::S3Notification
+    DependsOn: ReadinessCheckerTranscriptPermission
+    Properties:
+      ServiceToken: !GetAtt S3NotificationManager.Arn
+      BucketName: !Ref TranscriptionBucket
+      LambdaFunctionArn: !GetAtt SegmentationReadinessChecker.Arn
+      NotificationId: !Sub 'segmentation-readiness-transcript-${Environment}'
+      FilterSuffix: .json
+
+  ReadinessCheckerTranscriptPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SegmentationReadinessChecker
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt TranscriptionBucket.Arn
+
+  # Readiness Checker: waits for both transcript + visual detection results before triggering segmentation
+  SegmentationReadinessChecker:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-readiness-checker-${Environment}'
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      MemorySize: 256
+      Architectures:
+        - arm64
+      Role: !GetAtt PipelineRole.Arn
+      Environment:
+        Variables:
+          VIDEO_BUCKET: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
+          TRANSCRIPTION_BUCKET: !Ref TranscriptionBucket
+          SEGMENTATION_FUNCTION: !Ref TranscriptionSegmentationFunction
+          SEGMENT_RESULTS_PREFIX: segment_results/
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import re
+          import boto3
+
+          s3 = boto3.client('s3')
+          lambda_client = boto3.client('lambda')
+
+          VIDEO_BUCKET = os.environ['VIDEO_BUCKET']
+          TRANSCRIPTION_BUCKET = os.environ['TRANSCRIPTION_BUCKET']
+          SEGMENTATION_FUNCTION = os.environ['SEGMENTATION_FUNCTION']
+          SEGMENT_PREFIX = os.environ.get('SEGMENT_RESULTS_PREFIX', 'segment_results/')
+
+          def get_video_base_name(key):
+              """Extract base video name from transcript or result key."""
+              filename = os.path.basename(key).replace('.json', '').replace('.csv', '')
+              for suffix in ['_segments', '_with_subsegments', '_evaluation']:
+                  if filename.endswith(suffix):
+                      filename = filename[:-len(suffix)]
+                      break
+              parts = filename.rsplit('-', 1)
+              if len(parts) == 2 and parts[1].isdigit() and len(parts[1]) >= 8:
+                  return parts[0]
+              return filename
+
+          def handler(event, context):
+              """Check if both transcript and visual detection results exist for this video."""
+              print(f"Readiness check: {json.dumps(event, default=str)}")
+
+              for record in event.get('Records', []):
+                  bucket = record['s3']['bucket']['name']
+                  key = record['s3']['object']['key']
+                  video_name = get_video_base_name(key)
+
+                  if not video_name:
+                      print(f"Could not extract video name from {key}")
+                      continue
+
+                  print(f"Checking readiness for: {video_name}")
+
+                  # Check if visual detection results exist
+                  segment_key = f'{SEGMENT_PREFIX}{video_name}_segments.json'
+                  segments_ready = False
+                  try:
+                      s3.head_object(Bucket=VIDEO_BUCKET, Key=segment_key)
+                      segments_ready = True
+                      print(f"  ✓ Visual detection results found: {segment_key}")
+                  except Exception:
+                      print(f"  ✗ Visual detection results NOT found: {segment_key}")
+
+                  # Check if transcript exists
+                  transcript_ready = False
+                  try:
+                      resp = s3.list_objects_v2(
+                          Bucket=TRANSCRIPTION_BUCKET, Prefix=video_name, MaxKeys=5
+                      )
+                      for obj in resp.get('Contents', []):
+                          if obj['Key'].endswith('.json'):
+                              transcript_ready = True
+                              print(f"  ✓ Transcript found: {obj['Key']}")
+                              break
+                      if not transcript_ready:
+                          print(f"  ✗ Transcript NOT found for {video_name}")
+                  except Exception as e:
+                      print(f"  ✗ Error checking transcript: {e}")
+
+                  # If both ready, trigger AI segmentation
+                  if segments_ready and transcript_ready:
+                      transcript_key = None
+                      resp = s3.list_objects_v2(
+                          Bucket=TRANSCRIPTION_BUCKET, Prefix=video_name, MaxKeys=5
+                      )
+                      for obj in resp.get('Contents', []):
+                          if obj['Key'].endswith('.json'):
+                              transcript_key = obj['Key']
+                              break
+
+                      if transcript_key:
+                          segmentation_event = {
+                              'Records': [{
+                                  's3': {
+                                      'bucket': {'name': TRANSCRIPTION_BUCKET},
+                                      'object': {'key': transcript_key}
+                                  }
+                              }]
+                          }
+                          print(f"  → Both inputs ready, triggering AI segmentation for {transcript_key}")
+                          lambda_client.invoke(
+                              FunctionName=SEGMENTATION_FUNCTION,
+                              InvocationType='Event',
+                              Payload=json.dumps(segmentation_event),
+                          )
+                  else:
+                      print(f"  → Not ready yet (segments={segments_ready}, transcript={transcript_ready})")
+
+              return {'statusCode': 200}
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # S3 TRIGGERS on ProcessingBucket
+  # ─────────────────────────────────────────────────────────────────────────
+
+  SubSegmentDetectorPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SubSegmentDetectorFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt ProcessingBucket.Arn
+
+  SubSegmentMergerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SubSegmentMergerFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt ProcessingBucket.Arn
+
+  # ai_results/*_segments.json → SubSegmentDetector
+  AIResultsTrigger:
+    Type: Custom::S3Notification
+    DependsOn: SubSegmentDetectorPermission
+    Properties:
+      ServiceToken: !GetAtt S3NotificationManager.Arn
+      BucketName: !Ref ProcessingBucket
+      LambdaFunctionArn: !GetAtt SubSegmentDetectorFunction.Arn
+      NotificationId: !Sub 'ai-results-trigger-${Environment}'
+      FilterSuffix: _segments.json
+      FilterPrefix: ai_results/
+
+  # subsegment_results/*_with_subsegments.json → SubSegmentMerger
+  SubSegmentResultsTrigger:
+    Type: Custom::S3Notification
+    DependsOn:
+      - SubSegmentMergerPermission
+      - AIResultsTrigger
+    Properties:
+      ServiceToken: !GetAtt S3NotificationManager.Arn
+      BucketName: !Ref ProcessingBucket
+      LambdaFunctionArn: !GetAtt SubSegmentMergerFunction.Arn
+      NotificationId: !Sub 'subsegment-results-trigger-${Environment}'
+      FilterSuffix: _with_subsegments.json
+      FilterPrefix: subsegment_results/
+
+  # When sub-segment detection completes: merge final results, then run evaluation
+  SubSegmentMergerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-subsegment-merger-${Environment}'
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 60
+      MemorySize: 256
+      Architectures:
+        - arm64
+      Role: !GetAtt PipelineRole.Arn
+      Environment:
+        Variables:
+          MERGER_FUNCTION: !GetAtt ResultsMergerFunction.Arn
+          EVALUATION_FUNCTION: !Ref EvaluationFunction
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          import time
+
+          lambda_client = boto3.client('lambda')
+          MERGER_FUNCTION = os.environ['MERGER_FUNCTION']
+          EVALUATION_FUNCTION = os.environ['EVALUATION_FUNCTION']
+
+          def handler(event, context):
+              """After sub-segment detection completes: run evaluation, then merge final JSON."""
+              print(f"Sub-segment detection complete, running evaluation then final merge")
+
+              # 1. Run Evaluation first (synchronous - wait for it)
+              resp = lambda_client.invoke(
+                  FunctionName=EVALUATION_FUNCTION,
+                  InvocationType='RequestResponse',
+                  Payload=json.dumps(event),
+              )
+              print(f"Evaluation complete: {resp['StatusCode']}")
+
+              # 2. Run Results Merger (synchronous - picks up evaluation results)
+              resp = lambda_client.invoke(
+                  FunctionName=MERGER_FUNCTION,
+                  InvocationType='RequestResponse',
+                  Payload=json.dumps(event),
+              )
+              print(f"Merger complete: {resp['StatusCode']}")
+
+              return {'statusCode': 200}
+
+  # Custom resource Lambda for managing S3 notifications
+  S3NotificationManager:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-s3-notification-manager-${Environment}'
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 60
+      Role: !GetAtt S3NotificationManagerRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+
+          s3 = boto3.client('s3')
+
+          def handler(event, context):
+              try:
+                  props = event['ResourceProperties']
+                  bucket = props['BucketName']
+                  suffix = props.get('FilterSuffix', '.json')
+                  prefix = props.get('FilterPrefix', '')
+                  notif_id = props['NotificationId']
+
+                  if event['RequestType'] == 'Delete':
+                      config = s3.get_bucket_notification_configuration(Bucket=bucket)
+                      config.pop('ResponseMetadata', None)
+                      config['LambdaFunctionConfigurations'] = [
+                          c for c in config.get('LambdaFunctionConfigurations', [])
+                          if not c.get('Id', '').startswith(notif_id)
+                      ]
+                      s3.put_bucket_notification_configuration(Bucket=bucket, NotificationConfiguration=config)
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+
+                  config = s3.get_bucket_notification_configuration(Bucket=bucket)
+                  config.pop('ResponseMetadata', None)
+                  lambda_configs = config.get('LambdaFunctionConfigurations', [])
+                  lambda_configs = [c for c in lambda_configs if not c.get('Id', '').startswith(notif_id)]
+
+                  arns = props.get('LambdaFunctionArns', [])
+                  if not arns:
+                      arns = [props['LambdaFunctionArn']]
+
+                  for i, arn in enumerate(arns):
+                      filter_rules = [{'Name': 'suffix', 'Value': suffix}]
+                      if prefix:
+                          filter_rules.append({'Name': 'prefix', 'Value': prefix})
+                      lambda_configs.append({
+                          'Id': f'{notif_id}-{i}',
+                          'LambdaFunctionArn': arn,
+                          'Events': ['s3:ObjectCreated:*'],
+                          'Filter': {'Key': {'FilterRules': filter_rules}}
+                      })
+
+                  config['LambdaFunctionConfigurations'] = lambda_configs
+                  s3.put_bucket_notification_configuration(Bucket=bucket, NotificationConfiguration=config)
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f'Error: {e}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  S3NotificationManagerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3NotificationAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetBucketNotification, s3:PutBucketNotification]
+                Resource:
+                  - !GetAtt TranscriptionBucket.Arn
+                  - !GetAtt ProcessingBucket.Arn
+                  - !If
+                    - CreateVideoBucket
+                    - !GetAtt VideoStorageBucket.Arn
+                    - !Sub 'arn:aws:s3:::${VideoBucket}'
+              - Effect: Allow
+                Action: [s3:GetBucketNotification, s3:PutBucketNotification]
+                Resource: !Sub 'arn:aws:s3:::${ProjectName}-videos-${AWS::AccountId}'
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # AMPLIFY BUCKET SYNC (Copies results to Amplify storage buckets)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  AmplifySyncFunction:
+    Type: AWS::Lambda::Function
+    Condition: HasAmplifyBuckets
+    Properties:
+      FunctionName: !Sub '${ProjectName}-amplify-sync-${Environment}'
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 120
+      MemorySize: 256
+      Architectures:
+        - arm64
+      Role: !GetAtt AmplifySyncRole.Arn
+      Environment:
+        Variables:
+          AMPLIFY_MAIN_BUCKET: !Ref AmplifyMainBucket
+          AMPLIFY_DEV_BUCKET: !Ref AmplifyDevBucket
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+
+          s3 = boto3.client('s3')
+          AMPLIFY_MAIN = os.environ.get('AMPLIFY_MAIN_BUCKET', '')
+          AMPLIFY_DEV = os.environ.get('AMPLIFY_DEV_BUCKET', '')
+
+          # Map source prefixes to Amplify storage paths
+          PATH_MAP = {
+              'result/': 'result/',
+              'segment_results/': 'segment_results/',
+              'video/': 'video/',
+          }
+
+          def handler(event, context):
+              """Copy new files from video bucket to Amplify storage buckets."""
+              for record in event.get('Records', []):
+                  source_bucket = record['s3']['bucket']['name']
+                  source_key = record['s3']['object']['key']
+
+                  # Determine destination path
+                  dest_key = None
+                  for prefix, amplify_path in PATH_MAP.items():
+                      if source_key.startswith(prefix):
+                          dest_key = source_key
+                          break
+
+                  if not dest_key:
+                      print(f"Skipping {source_key} - no matching path")
+                      continue
+
+                  # Copy to each Amplify bucket
+                  for bucket in [AMPLIFY_MAIN, AMPLIFY_DEV]:
+                      if not bucket:
+                          continue
+                      try:
+                          s3.copy_object(
+                              CopySource={'Bucket': source_bucket, 'Key': source_key},
+                              Bucket=bucket,
+                              Key=dest_key,
+                          )
+                          print(f"Copied {source_key} → s3://{bucket}/{dest_key}")
+                      except Exception as e:
+                          print(f"Error copying to {bucket}: {e}")
+
+              return {'statusCode': 200}
+
+  AmplifySyncRole:
+    Type: AWS::IAM::Role
+    Condition: HasAmplifyBuckets
+    Properties:
+      RoleName: !Sub '${ProjectName}-amplify-sync-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3SyncAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject, s3:ListBucket]
+                Resource:
+                  - !If
+                    - CreateVideoBucket
+                    - !Sub '${VideoStorageBucket.Arn}/*'
+                    - !Sub 'arn:aws:s3:::${VideoBucket}/*'
+                  - !If
+                    - CreateVideoBucket
+                    - !GetAtt VideoStorageBucket.Arn
+                    - !Sub 'arn:aws:s3:::${VideoBucket}'
+              - Effect: Allow
+                Action: [s3:PutObject, s3:GetObject]
+                Resource:
+                  - !Sub 'arn:aws:s3:::${AmplifyMainBucket}/*'
+                  - !Sub 'arn:aws:s3:::${AmplifyDevBucket}/*'
+
+  AmplifySyncPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasAmplifyBuckets
+    Properties:
+      FunctionName: !Ref AmplifySyncFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !If
+        - CreateVideoBucket
+        - !GetAtt VideoStorageBucket.Arn
+        - !Sub 'arn:aws:s3:::${VideoBucket}'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OUTPUTS
+# ─────────────────────────────────────────────────────────────────────────────
+Outputs:
+  VisualSegmentDetectorLauncherName:
+    Value: !Ref VisualSegmentDetectorLauncher
+    Description: Launcher Lambda (invoke to batch-process videos)
+
+  VisualSegmentDetectorStateMachineArn:
+    Value: !Ref VisualSegmentDetectorStateMachine
+    Description: Step Functions state machine ARN
+
+  TranscriptionBucketName:
+    Value: !Ref TranscriptionBucket
+    Description: S3 bucket for transcription output (upload transcriptions here)
+
+  ProcessingBucketName:
+    Value: !Ref ProcessingBucket
+    Description: Intermediate processing bucket (segmentation, evaluation, sub-segments)
+
+  MergedResultsLocation:
+    Value: !If
+      - CreateVideoBucket
+      - !Sub 's3://${VideoStorageBucket}/results/'
+      - !Sub 's3://${VideoBucket}/results/'
+    Description: Final merged JSON results (one file per video, used by Amplify frontend)
+
+  VideoBucketName:
+    Value: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
+    Description: Video storage bucket name (sync source videos here)
+
+  PipelineFlow:
+    Value: !Sub
+      - |
+        Pipeline Flow (two independent tracks):
+
+        TRACK A — Visual Segment Detection (video only, no transcripts needed):
+        1. Sync videos: aws s3 sync s3://${ExternalVideoBucket}/video/ s3://${VBucket}/video/
+        2. Visual Detector → s3://${VBucket}/segment_results/{video}_segments.json
+        3. [Auto] Results Merger updates s3://${VBucket}/result/{video}.json
+
+        TRACK B — AI Segmentation (requires transcripts + visual detection output):
+        1. Sync transcripts: aws s3 sync s3://${ExternalTranscriptBucket}/ s3://${TranscriptionBucket}/
+        2. [Auto] AI Segmentation (Claude) → s3://${ProcessingBucket}/ai_results/
+        3. [Auto] Evaluation → s3://${ProcessingBucket}/evaluation/
+        4. [Auto] Sub-Segment Detection → s3://${ProcessingBucket}/subsegment_results/
+        5. [Auto] Results Merger updates s3://${VBucket}/result/{video}.json
+      - VBucket: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
+    Description: End-to-end pipeline
