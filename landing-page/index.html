@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TV News Auto-Labeling Pipeline</title>
+  <link rel="icon" type="image/png" href="favicon.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,6 +15,7 @@
         <li><a href="#overview">Overview</a></li>
         <li><a href="#backend">Backend</a></li>
         <li><a href="#algorithm">Algorithm</a></li>
+        <li><a href="#ticker">Ticker Detection</a></li>
         <li><a href="#transcription">Transcription AI</a></li>
         <li><a href="#frontend">Frontend</a></li>
         <li><a href="#dataflow">Data Flow</a></li>
@@ -197,6 +199,94 @@
             <li><strong>Active probing:</strong> When events can't be paired from the initial scan, targeted Lambda invocations search for missing partners at expected offsets</li>
             <li><strong>60-second chunks:</strong> Balances Lambda execution time against parallelism and Step Functions event limits</li>
           </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Alternate Visual Detection Section -->
+    <section id="ticker" class="section section-alt">
+      <div class="container">
+        <h2>Color and Region-Based Visual Differences Detection Example</h2>
+        <p>An alternative visual detection method for networks like CNN and Fox News that don't have reliable black frames between commercials. Instead of looking for black frames, this approach detects the <strong>absence of the on-screen news ticker/chyron</strong> — when the ticker disappears, you're watching a commercial.</p>
+
+        <div class="feature-grid">
+          <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>Color Profile Matching</h3>
+            <p>A precomputed HSV color histogram captures what the ticker region looks like during news. Each frame is compared against this profile using chi-squared distance.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">✂️</div>
+            <h3>Region Cropping</h3>
+            <p>Only the ticker region of each frame is analyzed (configurable crop boundaries), making detection fast and focused on the most informative pixels.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3>Single-Pass Scan</h3>
+            <p>Processes the entire video in one pass at configurable frame rate (0.5–1 fps), grouping consecutive dissimilar frames into commercial segments.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🔄</div>
+            <h3>Automatic Fallback</h3>
+            <p>If ticker detection finds zero segments, the system automatically falls back to the black-frame method.</p>
+          </div>
+        </div>
+
+        <div class="algo-section">
+          <h3>How It Works</h3>
+          <div class="code-block">
+            <pre><code>1. Crop each frame to the ticker region (e.g., bottom 25% of frame)
+2. Convert to HSV and compute a 36×32×32 bin histogram
+3. L1-normalize the histogram
+4. Compare against the precomputed network color profile using chi-squared distance
+5. If distance > threshold → frame is "dissimilar" (no ticker = commercial)
+6. Group consecutive dissimilar frames into segments
+7. Filter: remove short bursts (&lt;10s), merge nearby segments (&lt;60s gap)
+8. Skip first 5 minutes and last 60 seconds (margins)</code></pre>
+          </div>
+        </div>
+
+        <div class="algo-section">
+          <h3>Per-Source Configuration</h3>
+          <p>Each video source has its own detection profile stored in S3, configured via a JSON file:</p>
+          <div class="code-block">
+            <pre><code>{
+  "CNN": {
+    "crop_top_fraction": 0.75,     // Top of ticker region (75% down)
+    "crop_bottom_fraction": 1.0,   // Bottom of ticker region (100%)
+    "crop_left_fraction": 0.0,     // Full width
+    "crop_right_fraction": 1.0,
+    "chi_square_threshold": 0.35,  // Sensitivity
+    "scan_fps": 0.5,               // Frames per second to sample
+    "profile_key": "config/profiles/CNN_profile.npy"
+  }
+}</code></pre>
+          </div>
+          <p>Threshold tuning: lower = fewer detections (less sensitive), higher = more detections (more false positives). The profile must match the era of the video — a 2025 ticker profile won't work on 2005 footage.</p>
+        </div>
+
+        <div class="algo-section">
+          <h3>Building a Color Profile</h3>
+          <p>Profiles are built from ground-truth-labeled videos. The profile builder:</p>
+          <div class="code-block">
+            <pre><code>1. Load ground truth CSV with labeled segments (news vs commercial)
+2. For each "news" segment, extract frames from the ticker region
+3. Compute HSV histograms for all news frames
+4. Average all histograms into a single representative profile
+5. Save as .npy file → upload to S3</code></pre>
+          </div>
+          <p>The resulting profile represents "what the ticker looks like when news is airing." Frames that deviate significantly from this profile are classified as commercials.</p>
+        </div>
+
+        <div class="algo-section">
+          <h3>Detection Routing</h3>
+          <p>The video dispatcher automatically selects the detection method based on the video source:</p>
+          <div class="code-block">
+            <pre><code>Video uploaded → Dispatcher extracts source ID from filename
+  → If source has a ticker profile configured → Ticker Detection
+    → If 0 segments found → Fallback to Black-Frame Detection
+  → Otherwise → Black-Frame Detection (default)</code></pre>
+          </div>
         </div>
       </div>
     </section>
