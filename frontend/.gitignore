@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.aws-sam/
+.amplify/
+*.local
+amplify_outputs.json

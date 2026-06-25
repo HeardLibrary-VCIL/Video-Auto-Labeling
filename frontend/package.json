@@ -1,0 +1,31 @@
+{
+  "name": "video-autolabeling-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@aws-amplify/auth": "^6.16.0",
+    "@aws-amplify/ui-react": "^6.13.1",
+    "aws-amplify": "^6.15.7",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.9.4"
+  },
+  "devDependencies": {
+    "@aws-amplify/backend": "^1.23.0",
+    "@aws-amplify/backend-cli": "^1.8.3",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.2.1",
+    "aws-cdk": "^2.1128.1",
+    "aws-cdk-lib": "^2.260.0",
+    "constructs": "^10.6.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.4.10"
+  }
+}

@@ -1,0 +1,113 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --accent: #CFAE70;
+  --hover: #B49248;
+  --text-color: #1e293b;
+  --radius: 50px;
+  --font: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(180deg, #CFAE70, rgb(255, 255, 255));
+  background-attachment: fixed;
+  display: flex;
+  font-family: var(--font);
+  width: 100vw;
+  justify-content: center;
+  align-items: center;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 100vh;
+  width: 100%;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+  color: white;
+}
+
+button:hover {
+  border-color: var(--hover);
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+a {
+  font-weight: 800;
+  text-decoration: none;
+  color: var(--text-color);
+}
+
+/* Amplify UI overrides */
+.amplify-button--link {
+  color: var(--hover) !important;
+}
+
+.amplify-heading {
+  color: #0d0c09 !important;
+}
+
+.amplify-text {
+  color: #8a6f2f !important;
+}
+
+.amplify-button--link:hover {
+  color: #8a6f2f !important;
+}
+
+.amplify-tabs-item {
+  color: #8a6f2f !important;
+}
+
+.amplify-tabs__item {
+  color: var(--hover) !important;
+}
+
+.amplify-tabs__item--active {
+  color: #8a6f2f !important;
+}
+
+.amplify-tabs-item[data-state='active'] {
+  color: var(--hover) !important;
+  border-color: var(--accent) !important;
+}
+
+[data-amplify-authenticator] a {
+  color: var(--hover) !important;
+}
+
+[data-amplify-authenticator] a:hover {
+  color: #8a6f2f !important;
+}
+
+.amplify-input:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 1px var(--accent) !important;
+}
+
+.amplify-checkbox__input:checked,
+.amplify-radio__input:checked {
+  background-color: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
