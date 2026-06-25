@@ -50,9 +50,9 @@ Parameters:
 
   BedrockModelId:
     Type: String
-    Default: global.anthropic.claude-opus-4-8
+    Default: us.anthropic.claude-sonnet-4-5
     Description: >
-      Bedrock model ID for AI segmentation and sub-segment detection.
+      Bedrock model ID for AI segmentation.
       Use cross-region inference profile (us. prefix) for production.
       Must have Anthropic use case form submitted for the model family.
 
@@ -77,12 +77,55 @@ Parameters:
       Comma-separated list of segment type labels used by this pipeline.
       Customize based on your video domain (e.g., content,commercial,transition,preview).
 
+  TranscriptionLanguage:
+    Type: String
+    Default: en-US
+    Description: >
+      Language code for AWS Transcribe (e.g., en-US, es-US, fr-FR).
+      See https://docs.aws.amazon.com/transcribe/latest/dg/supported-languages.html
+
+  MaxSpeakerLabels:
+    Type: Number
+    Default: 15
+    Description: Maximum number of speakers for Transcribe speaker diarization (2-30).
+    MinValue: 2
+    MaxValue: 30
+
+  ProcessingRetentionDays:
+    Type: Number
+    Default: 90
+    Description: Days to retain intermediate processing results before auto-deletion (0 = never delete).
+    MinValue: 0
+
+  VisualDetectorMemory:
+    Type: Number
+    Default: 2048
+    Description: Memory (MB) for visual detector worker Lambda. Increase for large videos.
+    AllowedValues: [512, 1024, 2048, 3008, 4096, 5120, 6144, 7168, 8192, 9216, 10240]
+
+  TransitionDetectorMemory:
+    Type: Number
+    Default: 10240
+    Description: >
+      Memory (MB) for transition detector Lambda (Docker ARM64, supports up to 10240).
+    AllowedValues: [1024, 2048, 3008, 4096, 5120, 6144, 7168, 8192, 9216, 10240]
+
+  EnableTransitionDetector:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >
+      Whether to deploy the profile-based transition detector.
+      Set to false if only using black-frame detection.
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CONDITIONS
 # ─────────────────────────────────────────────────────────────────────────────
 Conditions:
   CreateVideoBucket: !Equals [!Ref VideoBucket, '']
   HasAmplifyBuckets: !Not [!Equals [!Ref AmplifyMainBucket, '']]
+  DeployTransitionDetector: !Equals [!Ref EnableTransitionDetector, 'true']
+  HasProcessingRetention: !Not [!Equals [!Ref ProcessingRetentionDays, 0]]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # GLOBALS
@@ -148,7 +191,7 @@ Resources:
         - Key: Component
           Value: transcription
 
-  # Intermediate processing bucket (segmentation, evaluation, sub-segments)
+  # Intermediate processing bucket (segmentation, evaluation)
   ProcessingBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -396,7 +439,7 @@ Resources:
         Variables:
           TRANSCRIPTION_FUNCTION: !Ref TranscriptionFunction
           VISUAL_DETECTOR_FUNCTION: !Ref VisualSegmentDetectorLauncher
-          TRANSITION_DETECTOR_FUNCTION: !Ref TransitionDetectorFunction
+          TRANSITION_DETECTOR_FUNCTION: !If [DeployTransitionDetector, !Ref TransitionDetectorFunction, '']
           READINESS_FUNCTION: !GetAtt SegmentationReadinessChecker.Arn
           AMPLIFY_SYNC_FUNCTION: !If [HasAmplifyBuckets, !Ref AmplifySyncFunction, '']
           VIDEO_BUCKET: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
@@ -602,7 +645,7 @@ Resources:
           SEGMENT_RESULTS_TABLE: !Ref SegmentResultsTable
     Metadata:
       DockerTag: worker
-      DockerContext: ../visual-segment-detector/lambda
+      DockerContext: ../visual-detector
       Dockerfile: Dockerfile
 
   VisualSegmentDetectorMerger:
@@ -624,7 +667,7 @@ Resources:
           SEGMENT_RESULTS_TABLE: !Ref SegmentResultsTable
     Metadata:
       DockerTag: merger
-      DockerContext: ../visual-segment-detector/lambda
+      DockerContext: ../visual-detector
       Dockerfile: Dockerfile
 
   VisualSegmentDetectorLauncher:
@@ -644,14 +687,14 @@ Resources:
           STATE_MACHINE_ARN: !Ref VisualSegmentDetectorStateMachine
     Metadata:
       DockerTag: launcher
-      DockerContext: ../visual-segment-detector/lambda
+      DockerContext: ../visual-detector
       Dockerfile: Dockerfile
 
   VisualSegmentDetectorStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
       Name: !Sub '${ProjectName}-visual-detector-batch-${Environment}'
-      DefinitionUri: ../visual-segment-detector/lambda/statemachine.asl.json
+      DefinitionUri: ../visual-detector/statemachine.asl.json
       DefinitionSubstitutions:
         WorkerFunctionArn: !GetAtt VisualSegmentDetectorWorker.Arn
         MergerFunctionArn: !GetAtt VisualSegmentDetectorMerger.Arn
@@ -666,12 +709,13 @@ Resources:
   # ─────────────────────────────────────────────────────────────────────────
   TransitionDetectorFunction:
     Type: AWS::Serverless::Function
+    Condition: DeployTransitionDetector
     Properties:
       FunctionName: !Sub '${ProjectName}-transition-detector-${Environment}'
       PackageType: Image
       ImageConfig:
-        Command: ["handler.handler"]
-      MemorySize: 3008
+        Command: ["lambda_handler.handler"]
+      MemorySize: !Ref TransitionDetectorMemory
       Timeout: 900
       EphemeralStorage:
         Size: 10240
@@ -685,7 +729,7 @@ Resources:
           DETECTION_CONFIG_KEY: config/detection_config.json
     Metadata:
       DockerTag: transition
-      DockerContext: ../transition-detector/lambda
+      DockerContext: ../transition-detector
       Dockerfile: Dockerfile
 
   # ═══════════════════════════════════════════════════════════════════════════
@@ -698,7 +742,7 @@ Resources:
     Properties:
       LayerName: !Sub '${ProjectName}-pipeline-deps-${Environment}'
       Description: AI dependencies for segmentation Lambdas
-      ContentUri: ../Layers/pipeline-deps/
+      ContentUri: ../layers/dependencies/
       CompatibleRuntimes:
         - python3.12
       CompatibleArchitectures:
@@ -717,7 +761,7 @@ Resources:
       Role: !GetAtt PipelineRole.Arn
       Timeout: 900
       MemorySize: 3008
-      CodeUri: ../transcription-ai/lambda/
+      CodeUri: ../ai-segmentation/
       Tags:
         Component: ai-segmentation
       Layers:
@@ -739,7 +783,7 @@ Resources:
       Role: !GetAtt PipelineRole.Arn
       Timeout: 300
       MemorySize: 2048
-      CodeUri: ../transcription-ai/lambda/
+      CodeUri: ../evaluation/
       Tags:
         Component: evaluation
       Layers:
@@ -750,35 +794,9 @@ Resources:
           GROUND_TRUTH_BUCKET: !Ref ProcessingBucket
           GROUND_TRUTH_KEY: !Ref GroundTruthPrefix
           SEGMENTATION_BUCKET: !Ref ProcessingBucket
+          PREDICTIONS_PREFIX: ai_results/
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # SUB-SEGMENT DETECTOR (AI-based sub-segment identification)
-  # ═══════════════════════════════════════════════════════════════════════════
-
-  SubSegmentDetectorFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub '${ProjectName}-subsegment-detector-${Environment}'
-      Runtime: python3.12
-      Handler: lambda_handler.handler
-      Role: !GetAtt PipelineRole.Arn
-      Timeout: 900
-      MemorySize: 3008
-      CodeUri: ../subsegment-detector/lambda/
-      Tags:
-        Component: subsegment-detection
-      Layers:
-        - !Ref PipelineDependenciesLayer
-      Environment:
-        Variables:
-          OUTPUT_BUCKET: !Ref ProcessingBucket
-          PROCESSING_BUCKET: !Ref ProcessingBucket
-          SEGMENTATION_BUCKET: !Ref ProcessingBucket
-          TRANSCRIPTION_BUCKET: !Ref TranscriptionBucket
-          VIDEO_BUCKET: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
-          BEDROCK_MODEL_ID: !Ref BedrockModelId
-          SEGMENT_TYPES: !Ref SegmentTypes
-
   # ═══════════════════════════════════════════════════════════════════════════
   # RESULTS MERGER (Combines all outputs into one JSON per video)
   # ═══════════════════════════════════════════════════════════════════════════
@@ -805,9 +823,9 @@ Resources:
       Code:
         ZipFile: |
           """
-          Results Merger: Combines visual detection, AI segmentation, and sub-segment
-          detection results into a single JSON file per video.
-          Output goes to VideoBucket/results/{videoBaseName}.json for frontend consumption.
+          Results Merger: Combines visual detection and AI segmentation
+          results into a single JSON file per video.
+          Output goes to VideoBucket/result/{videoBaseName}.json for frontend consumption.
           """
           import json
           import os
@@ -875,7 +893,7 @@ Resources:
               """Extract base video name from various key formats."""
               filename = os.path.basename(key)
               # Remove common suffixes
-              for suffix in ['_segments.json', '_with_subsegments.json', '_with_subsegments.csv', '_evaluation.json', '.json', '.csv']:
+              for suffix in ['_segments.json', '_evaluation.json', '.json', '.csv']:
                   if filename.endswith(suffix):
                       filename = filename[:-len(suffix)]
                       break
@@ -928,26 +946,7 @@ Resources:
               except Exception as e:
                   print(f"No AI segmentation results found: {e}")
 
-              # 3. Load sub-segment results from ProcessingBucket
-              subsegment_loaded = False
-              subsegment_timeline = []
-              try:
-                  resp = s3.list_objects_v2(
-                      Bucket=PROCESSING_BUCKET, Prefix=f'subsegment_results/{video_name}', MaxKeys=10
-                  )
-                  for obj in resp.get('Contents', []):
-                      if '_with_subsegments.json' in obj['Key']:
-                          subseg_data = json.loads(
-                              s3.get_object(Bucket=PROCESSING_BUCKET, Key=obj['Key'])['Body'].read()
-                          )
-                          subsegment_timeline = subseg_data.get('segments', [])
-                          merged['source_file'] = subseg_data.get('source_file', merged.get('source_file', ''))
-                          subsegment_loaded = True
-                          break
-              except Exception as e:
-                  print(f"No sub-segment results found: {e}")
-
-              # 4. Load evaluation results
+              # 3. Load evaluation results
               try:
                   resp = s3.list_objects_v2(
                       Bucket=PROCESSING_BUCKET, Prefix=f'evaluation/{video_name}', MaxKeys=10
@@ -962,78 +961,41 @@ Resources:
               except Exception as e:
                   print(f"No evaluation results found: {e}")
 
-              # 5. Build unified segments array for frontend display
+              # 4. Build unified segments array for frontend display
               all_segments = []
+              transcript_data = get_transcription_data(video_name)
 
-              if subsegment_loaded and subsegment_timeline:
-                  # Use sub-segment timeline directly (already has typed segments with times)
-                  for seg in subsegment_timeline:
+              # If AI segmentation produced results, use those as the primary source
+              if merged.get('segments'):
+                  for seg in merged['segments']:
+                      seg_start = float(seg.get('segment_start', seg.get('start_time', 0)))
+                      seg_end = float(seg.get('segment_end', seg.get('end_time', 0)))
                       seg_type = seg.get('segment_type', 'content')
+                      title = seg.get('title', '')
+                      transcript = seg.get('transcript', seg.get('first_sentence', ''))
+
+                      # Enrich with full transcript if available
+                      if not transcript and transcript_data and seg_start < seg_end:
+                          transcript = extract_transcript_text(transcript_data, seg_start, seg_end)
+
                       all_segments.append({
-                          'segment_start': float(seg.get('segment_start', 0)),
-                          'segment_end': float(seg.get('segment_end', 0)),
+                          'segment_start': seg_start,
+                          'segment_end': seg_end,
                           'segment_type': seg_type,
                           'label': seg_type,
-                          'title': seg.get('title', ''),
-                          'transcript': seg.get('transcript', ''),
+                          'title': title,
+                          'transcript': transcript,
                       })
-
-                  # Enrich content segments with titles from AI segmentation
-                  ai_content_segments = [
-                      s for s in merged.get('segments', [])
-                      if s.get('segment_type', '') not in ('commercial', 'transition')
-                  ]
-                  transcript_data = get_transcription_data(video_name)
-
-                  for seg in all_segments:
-                      if seg['label'] in ('commercial', 'transition'):
-                          continue
-
-                      seg_start = float(seg['segment_start'])
-
-                      # Find best matching AI segment by closest start time
-                      best_ai = None
-                      best_diff = float('inf')
-                      for ai_seg in ai_content_segments:
-                          ai_start = float(ai_seg.get('segment_start', ai_seg.get('start_time', 0)))
-                          diff = abs(ai_start - seg_start)
-                          if diff < best_diff:
-                              best_diff = diff
-                              best_ai = ai_seg
-
-                      if best_ai and best_diff < 60:
-                          if not seg['title']:
-                              seg['title'] = best_ai.get('title', '')
-
-                      # Extract full transcript if not already present
-                      if not seg.get('transcript'):
-                          start = float(seg['segment_start'])
-                          end = float(seg['segment_end']) if seg['segment_end'] else 0
-                          if transcript_data and start < end:
-                              full_text = extract_transcript_text(transcript_data, start, end)
-                              if full_text:
-                                  seg['transcript'] = full_text
-                          if not seg.get('transcript') and best_ai and best_diff < 60:
-                              seg['transcript'] = best_ai.get('first_sentence', '')
-
               else:
-                  # Fallback: build from separate sources (no sub-segment data available)
+                  # Fallback: use visual detection segments only
                   for seg in merged['visual_segments']:
                       all_segments.append({
                           'segment_start': seg.get('start_time', 0),
                           'segment_end': seg.get('end_time', 0),
-                          'segment_type': 'commercial',
-                          'label': 'commercial',
+                          'segment_type': 'break',
+                          'label': 'break',
                           'title': '',
-                      })
-                  for seg in merged.get('segments', []):
-                      all_segments.append({
-                          'segment_start': seg.get('segment_start', seg.get('start_time', 0)),
-                          'segment_end': seg.get('segment_end', seg.get('end_time', 0)),
-                          'segment_type': seg.get('segment_type', 'content'),
-                          'label': seg.get('segment_type', 'content'),
-                          'title': seg.get('title', ''),
-                          'transcript': seg.get('first_sentence', ''),
+                          'transcript': '',
                       })
 
               # Sort by start time
@@ -1121,7 +1083,7 @@ Resources:
           def get_video_base_name(key):
               """Extract base video name from transcript or result key."""
               filename = os.path.basename(key).replace('.json', '').replace('.csv', '')
-              for suffix in ['_segments', '_with_subsegments', '_evaluation']:
+              for suffix in ['_segments', '_evaluation']:
                   if filename.endswith(suffix):
                       filename = filename[:-len(suffix)]
                       break
@@ -1206,53 +1168,31 @@ Resources:
   # S3 TRIGGERS on ProcessingBucket
   # ─────────────────────────────────────────────────────────────────────────
 
-  SubSegmentDetectorPermission:
+  AIResultsMergerPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref SubSegmentDetectorFunction
+      FunctionName: !Ref AIResultsMergerFunction
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
       SourceArn: !GetAtt ProcessingBucket.Arn
 
-  SubSegmentMergerPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref SubSegmentMergerFunction
-      Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
-      SourceArn: !GetAtt ProcessingBucket.Arn
-
-  # ai_results/*_segments.json → SubSegmentDetector
+  # ai_results/*_segments.json → Evaluation + Results Merger
   AIResultsTrigger:
     Type: Custom::S3Notification
-    DependsOn: SubSegmentDetectorPermission
+    DependsOn: AIResultsMergerPermission
     Properties:
       ServiceToken: !GetAtt S3NotificationManager.Arn
       BucketName: !Ref ProcessingBucket
-      LambdaFunctionArn: !GetAtt SubSegmentDetectorFunction.Arn
+      LambdaFunctionArn: !GetAtt AIResultsMergerFunction.Arn
       NotificationId: !Sub 'ai-results-trigger-${Environment}'
       FilterSuffix: _segments.json
       FilterPrefix: ai_results/
 
-  # subsegment_results/*_with_subsegments.json → SubSegmentMerger
-  SubSegmentResultsTrigger:
-    Type: Custom::S3Notification
-    DependsOn:
-      - SubSegmentMergerPermission
-      - AIResultsTrigger
-    Properties:
-      ServiceToken: !GetAtt S3NotificationManager.Arn
-      BucketName: !Ref ProcessingBucket
-      LambdaFunctionArn: !GetAtt SubSegmentMergerFunction.Arn
-      NotificationId: !Sub 'subsegment-results-trigger-${Environment}'
-      FilterSuffix: _with_subsegments.json
-      FilterPrefix: subsegment_results/
-
-  # When sub-segment detection completes: merge final results, then run evaluation
-  SubSegmentMergerFunction:
+  # When AI segmentation completes: run evaluation, then merge final results
+  AIResultsMergerFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-subsegment-merger-${Environment}'
+      FunctionName: !Sub '${ProjectName}-ai-results-merger-${Environment}'
       Runtime: python3.12
       Handler: index.handler
       Timeout: 60
@@ -1269,17 +1209,16 @@ Resources:
           import json
           import os
           import boto3
-          import time
 
           lambda_client = boto3.client('lambda')
           MERGER_FUNCTION = os.environ['MERGER_FUNCTION']
           EVALUATION_FUNCTION = os.environ['EVALUATION_FUNCTION']
 
           def handler(event, context):
-              """After sub-segment detection completes: run evaluation, then merge final JSON."""
-              print(f"Sub-segment detection complete, running evaluation then final merge")
+              """After AI segmentation completes: run evaluation, then merge final JSON."""
+              print(f"AI segmentation complete, running evaluation then final merge")
 
-              # 1. Run Evaluation first (synchronous - wait for it)
+              # 1. Run Evaluation (synchronous)
               resp = lambda_client.invoke(
                   FunctionName=EVALUATION_FUNCTION,
                   InvocationType='RequestResponse',
@@ -1287,7 +1226,7 @@ Resources:
               )
               print(f"Evaluation complete: {resp['StatusCode']}")
 
-              # 2. Run Results Merger (synchronous - picks up evaluation results)
+              # 2. Run Results Merger (synchronous)
               resp = lambda_client.invoke(
                   FunctionName=MERGER_FUNCTION,
                   InvocationType='RequestResponse',
@@ -1526,7 +1465,7 @@ Outputs:
 
   ProcessingBucketName:
     Value: !Ref ProcessingBucket
-    Description: Intermediate processing bucket (segmentation, evaluation, sub-segments)
+    Description: Intermediate processing bucket (segmentation, evaluation)
 
   MergedResultsLocation:
     Value: !If
@@ -1553,7 +1492,6 @@ Outputs:
         1. Sync transcripts: aws s3 sync s3://${ExternalTranscriptBucket}/ s3://${TranscriptionBucket}/
         2. [Auto] AI Segmentation (Claude) → s3://${ProcessingBucket}/ai_results/
         3. [Auto] Evaluation → s3://${ProcessingBucket}/evaluation/
-        4. [Auto] Sub-Segment Detection → s3://${ProcessingBucket}/subsegment_results/
-        5. [Auto] Results Merger updates s3://${VBucket}/result/{video}.json
+        4. [Auto] Results Merger updates s3://${VBucket}/result/{video}.json
       - VBucket: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
     Description: End-to-end pipeline

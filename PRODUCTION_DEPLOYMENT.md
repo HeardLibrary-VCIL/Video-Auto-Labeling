@@ -367,3 +367,181 @@ FRONTEND:
 | **Total (transcripts already available)** | **~$0.75–$1.15** |
 
 Lambda free tier covers visual detection easily. AWS Transcribe charges $0.024/min. Bedrock has no free tier.
+
+---
+
+## Customizing AI Prompts
+
+The AI segmentation behavior is controlled by `backend/ai-segmentation/prompts.py`. Edit this file to adapt the pipeline to your video domain.
+
+### Segment Type Definitions
+
+Define what types of segments the AI should look for:
+
+```python
+SEGMENT_TYPES = {
+    "content": "Main content segment (story, topic, presentation)",
+    "transition": "Brief transition or preview of upcoming content",
+    "break": "Commercial break or pause in content",
+    "intro": "Opening or introduction",
+    "outro": "Closing or sign-off",
+}
+```
+
+**Examples for different domains:**
+
+| Domain | Segment Types |
+|--------|---------------|
+| Broadcasts | `content`, `commercial`, `tease`, `interview`, `weather` |
+| Lectures | `lecture`, `qa`, `break`, `demo`, `summary` |
+| Sports | `play`, `replay`, `commentary`, `halftime`, `ad` |
+| Podcasts | `discussion`, `ad_read`, `intro`, `outro`, `music` |
+
+### System Prompt
+
+The `SYSTEM_PROMPT` variable instructs Claude on how to segment. Key things to customize:
+
+- **Identification rules** — what signals a boundary in your content (topic shifts, speaker changes, visual cues mentioned in transcript)
+- **Boundary markers** — `[ BOUNDARY ]` markers from visual detection are hard stops; no segment spans across them
+- **Domain context** — tell the model what kind of content it's analyzing so it applies appropriate judgment
+
+### Structured Output
+
+The `SegmentResult` Pydantic model defines what Claude returns per segment:
+
+```python
+class SegmentResult(BaseModel):
+    title: str           # Brief descriptive title
+    segment_type: str    # Must match a key in SEGMENT_TYPES
+    first_sentence: str  # Verbatim — used for timestamp matching
+    last_sentence: str   # Verbatim — used for timestamp matching
+```
+
+The `first_sentence` and `last_sentence` fields are critical — they're matched against the word-level transcript to determine precise start/end timestamps. They must be **exact quotes** from the transcript.
+
+### After Editing Prompts
+
+1. Redeploy the stack: `sam build --use-container && sam deploy ...`
+2. Or update just the Lambda code: `aws lambda update-function-code ...`
+3. Re-run the pipeline for a test video to validate results
+4. Update `frontend/src/utils/segment_types.ts` to match your new type labels and colors
+
+---
+
+## Extending the Pipeline: Sub-Segmentation & Multi-Pass AI
+
+The base pipeline performs a single AI segmentation pass. For more complex video types, you can add additional AI passes that refine or sub-classify segments.
+
+### Sub-Segmentation (Detecting Segments Within Segments)
+
+Sub-segmentation adds a second AI pass that takes the output of the first pass and identifies finer-grained segments within each primary segment. Examples:
+
+| Domain | Primary Segments | Sub-Segments |
+|--------|-----------------|--------------|
+| Broadcasts | News, Commercial | Tease, Preview, Goodnight (within News) |
+| Lectures | Lecture, Break | Example, Definition, Theorem (within Lecture) |
+| Sports | Play, Ad | Replay, Penalty, Goal (within Play) |
+| Podcasts | Discussion, Ad | Question, Anecdote, Tangent (within Discussion) |
+
+**Implementation approach:**
+
+1. **Create a new Lambda** (`backend/subsegment-detector/`) that:
+   - Loads the primary `ai_results/{video}_segments.json`
+   - Loads the transcript for the video
+   - Sends each primary content segment's transcript to Claude with a sub-classification prompt
+   - Writes output to `subsegment_results/{video}_with_subsegments.json`
+
+2. **Add an S3 trigger** on `ai_results/*_segments.json` that invokes your sub-segment Lambda (instead of or in addition to the AIResultsMerger)
+
+3. **Chain the pipeline**: AI Segmentation → Sub-Segment Detector → Evaluation → Results Merger
+
+4. **Update the Results Merger** to read from `subsegment_results/` as the authoritative source when available
+
+**Example sub-segmentation prompt:**
+
+```python
+SUB_SEGMENT_PROMPT = """
+You are analyzing a content segment from a video. Your task is to identify
+sub-segments within this segment.
+
+SEGMENT TYPE: {segment_type}
+SEGMENT TIMERANGE: {start} - {end}
+
+TRANSCRIPT:
+{transcript}
+
+Identify any of these sub-segment types within the text:
+{sub_segment_types}
+
+Return the sub-segments with verbatim first/last sentences for timestamp matching.
+"""
+```
+
+### Multi-Pass AI Segmentation
+
+For complex content, you can chain multiple AI passes with different prompts:
+
+```
+Pass 1: Broad classification (content vs break vs transition)
+Pass 2: Topic segmentation (within content segments)
+Pass 3: Sub-type detection (teaser, preview, recap within transitions)
+```
+
+**Implementation:**
+
+1. **Duplicate `backend/ai-segmentation/`** as `backend/ai-segmentation-pass2/`
+2. **Create a different prompt** in `pass2/prompts.py` focused on your refinement task
+3. **Add to the SAM template** as a new Lambda with its own trigger:
+   ```yaml
+   AISegmentationPass2:
+     Type: AWS::Serverless::Function
+     Properties:
+       FunctionName: !Sub '${ProjectName}-ai-segmentation-pass2-${Environment}'
+       Handler: segment_handler.lambda_handler
+       CodeUri: ../ai-segmentation-pass2/
+       Environment:
+         Variables:
+           INPUT_PREFIX: ai_results/
+           OUTPUT_PREFIX: refined_results/
+   ```
+4. **Wire the trigger**: `ai_results/*_segments.json` → Pass 2 → `refined_results/` → Evaluation + Merger
+
+### Adding a New Segment Type
+
+To add a segment type (e.g., "interview") to the existing single-pass pipeline:
+
+1. **Update `backend/ai-segmentation/prompts.py`:**
+   ```python
+   SEGMENT_TYPES = {
+       "content": "Main content segment",
+       "interview": "Interview or Q&A session",  # ← new
+       "break": "Commercial or pause",
+       "transition": "Brief transition",
+   }
+   ```
+
+2. **Update the SAM template** `SegmentTypes` parameter default:
+   ```yaml
+   Default: 'content,interview,break,transition'
+   ```
+
+3. **Update the frontend** `segment_types.ts`:
+   ```typescript
+   export const SEGMENT_TYPE_COLORS = {
+     'CONTENT': '#45B7D1',
+     'INTERVIEW': '#9B59B6',  // ← new
+     'BREAK': '#FF6B6B',
+     'TRANSITION': '#4ECDC4',
+   };
+   ```
+
+4. **Redeploy** backend and frontend.
+
+### Architecture Patterns for Extensions
+
+| Pattern | When to Use | Trigger |
+|---------|-------------|---------|
+| Serial chain | Each pass depends on previous | S3 event on previous output prefix |
+| Fan-out | Multiple independent classifiers | Single trigger invokes N Lambdas |
+| Conditional | Only run on certain segment types | Check segment type in Lambda before processing |
+| Feedback loop | Human corrections improve next run | Edits saved to `edits/` prefix, loaded as few-shot examples |
