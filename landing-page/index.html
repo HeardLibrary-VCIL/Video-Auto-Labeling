@@ -296,19 +296,12 @@
             <p class="conn-detail">Visual analysis → break segment timestamps</p>
           </div>
           <div class="conn-arrow">↘</div>
-          <div class="conn-box conn-consumer">
-            <h4>Sub-Segment Detector</h4>
-            <p>Inputs: visual segments + AI segments</p>
-            <p>Merges both into unified timeline</p>
-            <p class="conn-detail">Detects transitions at content→break boundaries</p>
-            <p>Outputs: <code>subsegment_results/{video}_with_subsegments.json</code></p>
-          </div>
-          <div class="conn-arrow">↗</div>
+
           <div class="conn-box conn-source">
             <h4>AI Segmentation</h4>
             <p>Outputs: <code>ai_results/{video}_segments.json</code></p>
             <p class="conn-detail">Claude transcript analysis → content segment boundaries</p>
-          </div>
+          </div> 
         </div>
         <h3>AI Segmentation Approach</h3>
         <div class="algo-section">

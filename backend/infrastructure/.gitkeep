@@ -1,4 +1,0 @@
-# SAM template goes here
-# Copy and adapt infrastructure/tvnews-pipeline-complete.yaml
-# Rename resources from tvnews-* to your project name
-# Update CodeUri paths to point to ../visual-detector/, ../ai-segmentation/, etc.

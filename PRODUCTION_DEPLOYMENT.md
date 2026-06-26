@@ -108,11 +108,13 @@ docker info  # Docker must be running
 
 ## Step 0: Deploy Amplify Frontend
 
-1. **AWS Amplify Console** → Create new app → Connect to GitHub repo → Deploy
+1. **AWS Amplify Console** → Create new app → Connect to GitHub repo → Deploy 
+  1.a GitHub repo for just the frontend for console deployment:
+   https://github.com/HeardLibrary-VCIL/video-segmentation-ux
 2. After deploy, get the storage bucket name:
 
 ```bash
-aws s3 ls --profile <PROFILE> | grep amplify
+aws s3 ls --profile <PROFILE> | grep videosegmentation
 ```
 
 Note the bucket name(s) for Step 1.
