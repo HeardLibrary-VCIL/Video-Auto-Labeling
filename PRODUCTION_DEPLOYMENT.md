@@ -100,28 +100,102 @@ docker info  # Docker must be running
 
 ## Deployment Order
 
-1. **Frontend first** — deploy Amplify app to get storage bucket names
-2. **Backend second** — deploy with `AmplifyMainBucket`/`AmplifyDevBucket` parameters for auto-sync
-3. **Upload videos** — triggers the pipeline automatically
+1. **Frontend** — deploy Amplify app to get storage bucket names
+2. **Backend Deployment** — deploy with `AmplifyMainBucket`/`AmplifyDevBucket` parameters for auto-sync
+3. **Customization** -- route to relevant video processing pathway and adjust ai prompts for target content and types of segments
+4. **Upload videos** — triggers the pipeline automatically
 
 ---
 
-## Step 0: Deploy Amplify Frontend
+## Step 1: Deploy Amplify Frontend
 
-1. **AWS Amplify Console** → Create new app → Connect to GitHub repo → Deploy 
-  1.a GitHub repo for just the frontend for console deployment:
-   https://github.com/HeardLibrary-VCIL/video-segmentation-ux
-2. After deploy, get the storage bucket name:
+The frontend is a React web application deployed with AWS Amplify Gen 2. It provides video browsing, segmentation timeline viewing, and editing tools. You have two options for deployment:
+
+### Option A: Deploy directly from the pre-built GitHub repo (easiest)
+
+Use this if you want to get started quickly without modifying the code.
+
+1. **Sign in to AWS Console** → Search for "Amplify" → Open **AWS Amplify**
+2. Click **"Create new app"**
+3. Select **"GitHub"** as the source → Click **"Next"**
+4. You'll be asked to authorize AWS Amplify to access your GitHub account. Click **"Authorize"**
+5. In the repository dropdown, select: `HeardLibrary-VCIL/video-segmentation-ux`
+   - If you don't see it, click "Install GitHub App" and grant access to the HeardLibrary-VCIL organization
+6. Select the branch: **main**
+7. Amplify auto-detects the build settings from `amplify.yml` in the repo — no changes needed
+8. Click **"Next"** → **"Save and deploy"**
+9. Wait 3-5 minutes for the build to complete. You'll see a green checkmark when done.
+10. Your app URL will appear at the top (e.g., `https://main.d1234abcde.amplifyapp.com`)
+
+### Option B: Fork and customize (for your own branding/modifications)
+
+Use this if you want to change colors, add pages, or modify behavior.
+
+1. **Fork the repo** to your own GitHub account:
+   - Go to https://github.com/HeardLibrary-VCIL/video-segmentation-ux
+   - Click **"Fork"** (top right) → Create the fork
+2. **Clone your fork locally** and make changes:
+   ```bash
+   git clone https://github.com/YOUR_ORG/video-segmentation-ux.git
+   cd video-segmentation-ux
+   ```
+3. **Customize** (see `frontend/README.md` for details):
+   - Colors/theme: edit `src/index.css` (CSS variables at top)
+   - Segment types: edit `src/utils/segment_types.ts`
+   - Logo: replace `public/favicon.png`
+   - Pages: add new files in `src/pages/` and register in `src/App.tsx`
+4. **Push your changes:**
+   ```bash
+   git add -A && git commit -m "Customize frontend" && git push
+   ```
+5. **Deploy in Amplify Console** following the same steps as Option A, but select your forked repo instead
+
+### After Deployment: Get the Storage Bucket Name
+
+Once deployed, Amplify creates an S3 storage bucket for your app. You'll need this name for the backend deployment (to enable auto-sync of results).
 
 ```bash
-aws s3 ls --profile <PROFILE> | grep videosegmentation
+aws s3 ls --profile <PROFILE> | grep amplify
 ```
 
-Note the bucket name(s) for Step 1.
+Look for a bucket name like `amplify-xxxxx-ma-videosegmentationstorage-xxxxx`. Note it — you'll pass it as the `AmplifyMainBucket` parameter when deploying the backend.
+
+### After Deployment: Create Your First User
+
+The app requires sign-in. Create a user via the Amplify-generated Cognito User Pool:
+
+1. In the AWS Console → Search for **"Cognito"** → Open your User Pool
+2. Click **"Create user"**
+3. Enter an email address and a temporary password
+4. The user will be prompted to set a new password on first sign-in
+
+Or via CLI:
+```bash
+# Find your User Pool ID
+aws cognito-idp list-user-pools --max-results 10 --profile <PROFILE>
+
+# Create a user
+aws cognito-idp admin-create-user \
+  --user-pool-id <USER_POOL_ID> \
+  --username user@example.com \
+  --user-attributes Name=email,Value=user@example.com \
+  --temporary-password "TempPass123!" \
+  --profile <PROFILE>
+```
+
+### After Deployment: Generate amplify_outputs.json (for local development)
+
+If you want to run the frontend locally (e.g., for development), generate the config file:
+
+```bash
+npx ampx generate outputs --app-id <APP_ID> --branch main
+```
+
+Find your App ID in the Amplify Console → App settings → General.
 
 ---
 
-## Step 1: Deploy Backend Infrastructure
+## Step 2: Deploy Backend Infrastructure
 
 The SAM template deploys all Lambda functions, S3 buckets, DynamoDB tables, Step Functions, and event triggers.
 
@@ -129,9 +203,9 @@ The SAM template deploys all Lambda functions, S3 buckets, DynamoDB tables, Step
 cd backend/infrastructure
 
 # Build (uses Docker — no local Python 3.12 needed)
-sam build --template-file video-segmentation-pipeline-complete.yaml --use-container
+sam build --template-file video-segmentation-pipeline.yaml --use-container
 
-# Deploy
+# Deploy examples
 sam deploy \
   --profile <PROFILE> \
   --stack-name video-autolabeling \
@@ -140,8 +214,18 @@ sam deploy \
   --resolve-s3 --resolve-image-repos \
   --no-confirm-changeset
 ```
+```
+sam deploy \
+  --profile <PROFILE> \
+  --stack-name <STACKNAME> \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+  --region <REGION> \
+  --resolve-s3 --resolve-image-repos \
+  --parameter-overrides \
+    BedrockModelId=<BEDROCK_MODEL_ID> \
+```
 
-With Amplify auto-sync (optional):
+With Amplify auto-sync and Claude Sonnet 4.5 (optional, recommended):
 
 ```bash
 sam deploy \
@@ -151,8 +235,22 @@ sam deploy \
   --region us-east-1 \
   --resolve-s3 --resolve-image-repos \
   --parameter-overrides \
+    BedrockModelId=global.anthropic.claude-sonnet-4-5-20250929-v1:0 \
     AmplifyMainBucket=amplify-xxxxx-main-storagebucket-xxxxx \
     AmplifyDevBucket=amplify-xxxxx-dev-storagebucket-xxxxx
+```
+```
+am deploy \
+  --profile <PROFILE> \
+  --stack-name <STACKNAME> \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+  --region <REGION> \
+  --resolve-s3 --resolve-image-repos \
+  --parameter-overrides \
+    BedrockModelId=<BEDROCK_MODEL_ID> \
+    ExternalVideoBucket=<PREEXISTENT_VIDEO_SOURCE_BUCKET_NAME> \    ExternalTranscriptBucket=<PREEXISTENT_TRANSCRIPT_SOURCE_BUCKET_NAME> \
+    AmplifyDevBucket=amplify-d2ghkzdvbaby3m-de-tvnewsvideostoragebucket-gc82ezcrxgqq \
+    AmplifyMainBucket=amplify-d2ghkzdvbaby3m-ma-tvnewsvideostoragebucket-lz64ujkynmno
 ```
 
 ### What Gets Created
@@ -172,32 +270,40 @@ sam deploy \
 | Readiness Checker | Python Lambda — gates AI pipeline |
 | Video Dispatcher | Python Lambda — routes S3 events |
 | Step Functions State Machine | Orchestrates parallel visual detection |
-| 4 DynamoDB Tables | Detection results storage |
+| 4 DynamoDB Tables | Detection results and evaluation storage |
 | Shared Lambda Layer | pydantic-ai, boto3, rich |
 
 ---
 
-## Step 2: Upload Videos
+## Step 2: Source Data
 
-Upload videos to trigger the pipeline:
+### Sync Pre-existing Transcripts (Optional)
+
+```bash
+aws s3 sync s3://<TRANSCRIPT_SOURCE>/ s3://{ProjectName}-transcriptions-{accountId}/ --profile <PROFILE>
+```
+### Upload segmentation ground truth csv for evaluation (Optional)
+
+```
+aws s3 sync <GROUND_TRUTH_SOURCE_FILE> \
+  s3://tvnews-processing-<ACCOUNT_NUMBER>/ground_truth/ \
+  --profile <AWS_PROFILE>
+
+```
+
+
+### Sync Videos from External Source (Optional)
+
+```bash
+aws s3 sync s3://<SOURCE_BUCKET>/video/ s3://{ProjectName}-videos-{accountId}/video/ --profile <PROFILE>
+```
+### Or Upload videos to trigger the pipeline:
 
 ```bash
 aws s3 cp my-video.mp4 s3://{ProjectName}-videos-{accountId}/video/ --profile <PROFILE>
 ```
 
 The dispatcher automatically routes to transcription + visual detection.
-
-### Sync from External Source
-
-```bash
-aws s3 sync s3://<SOURCE_BUCKET>/video/ s3://{ProjectName}-videos-{accountId}/video/ --profile <PROFILE>
-```
-
-### Sync Pre-existing Transcripts
-
-```bash
-aws s3 sync s3://<TRANSCRIPT_SOURCE>/ s3://{ProjectName}-transcriptions-{accountId}/ --profile <PROFILE>
-```
 
 ---
 
@@ -223,6 +329,263 @@ aws s3 ls s3://{ProjectName}-processing-{accountId}/ai_results/ --profile <PROFI
 # Final merged results
 aws s3 ls s3://{ProjectName}-videos-{accountId}/result/ --profile <PROFILE>
 ```
+
+---
+## Step 3a Stuck?: Verify S3 Triggers (Before First Video Upload)
+
+After deployment, verify that the S3 event notifications were created correctly. If they're missing or stale from a previous deployment, the pipeline won't trigger.
+
+**Check all bucket notifications:**
+
+```bash
+# Video bucket — should have the dispatcher trigger
+aws s3api get-bucket-notification-configuration \
+  --bucket {ProjectName}-videos-{accountId} --profile <PROFILE>
+
+# Transcription bucket — should have readiness checker trigger
+aws s3api get-bucket-notification-configuration \
+  --bucket {ProjectName}-transcriptions-{accountId} --profile <PROFILE>
+
+# Processing bucket — should have AI results trigger
+aws s3api get-bucket-notification-configuration \
+  --bucket {ProjectName}-processing-{accountId} --profile <PROFILE>
+```
+
+**If notifications are missing or stale**, clear and redeploy:
+
+```bash
+# Clear stale notifications (from previous stacks or manual config)
+aws s3api put-bucket-notification-configuration \
+  --bucket {ProjectName}-processing-{accountId} \
+  --notification-configuration '{}' \
+  --profile <PROFILE>
+
+# Then redeploy the stack to re-create them
+sam deploy ...
+```
+
+**If the video bucket trigger is missing** after deploy (custom resource race condition), add it manually:
+
+```bash
+aws s3api put-bucket-notification-configuration \
+  --bucket {ProjectName}-videos-{accountId} \
+  --notification-configuration '{
+    "LambdaFunctionConfigurations": [{
+      "Id": "video-bucket-trigger-prod-0",
+      "LambdaFunctionArn": "arn:aws:lambda:{region}:{accountId}:function:{ProjectName}-video-dispatcher-prod",
+      "Events": ["s3:ObjectCreated:*"]
+    }]
+  }' \
+  --profile <PROFILE>
+```
+
+**Important:** Use `s3:ObjectCreated:*` (not just `Put`) — large files use multipart upload which fires `CompleteMultipartUpload`, not `Put`.
+----
+## STEP 3b Optional Ground Truth details: Setting Up Evaluation
+
+Evaluation compares pipeline output against human-annotated ground truth. It's optional — the pipeline runs fine without it, but evaluation gives you accuracy metrics to track quality over time.
+
+### 1. Create Ground Truth CSV
+
+Create a CSV file with human-labeled segments for one or more videos:
+
+```csv
+file,segment_type,segment_start,segment_end,segment_transcript
+20260402CNN,n,3620,13313,"Opening news segment transcript..."
+20260402CNN,c,13313,18500,""
+20260402CNN,n,18500,25032,"Second news segment..."
+```
+
+**Required columns:**
+- `file` — video name (must match exactly, e.g., `20260402CNN`)
+- `segment_type` — lowercase type label (`n`, `c`, `t`, `p`, `g`, `ignore`)
+- `segment_start` — start time in seconds
+- `segment_end` — end time in seconds
+
+**Optional column:**
+- `segment_transcript` — transcript text for the segment
+
+### 2. Upload Ground Truth to Processing Bucket
+
+```bash
+aws s3 cp my_ground_truth.csv \
+  s3://{ProjectName}-processing-{accountId}/ground_truth/{source}_ground_truth.csv \
+  --profile <PROFILE>
+```
+
+The evaluation handler looks for ground truth by extracting the source/network from the video filename. For `20260402CNN`, it looks for `ground_truth/cnn_ground_truth.csv`.
+
+### 3. Run Evaluation
+
+Evaluation runs automatically after AI segmentation completes (triggered by the results merger). To run it manually:
+
+```bash
+aws lambda invoke \
+  --function-name {ProjectName}-evaluation-prod \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"Records":[{"s3":{"bucket":{"name":"{ProjectName}-processing-{accountId}"},"object":{"key":"ai_results/{VIDEO_NAME}_segments.json"}}}]}' \
+  /tmp/eval_response.json && cat /tmp/eval_response.json
+```
+
+### 4. View Results
+
+Evaluation output is written to:
+```
+s3://{ProjectName}-processing-{accountId}/evaluation/{VIDEO_NAME}_evaluation.json
+```
+
+Metrics include:
+- **Frame accuracy** — per-second classification correctness
+- **Segment F1** — at IoU thresholds 0.25, 0.5, 0.75
+- **Boundary F1** — at tolerances 2s, 5s, 10s
+- **Mean boundary error** — average seconds off from true boundaries
+
+### 5. Building Ground Truth from Existing Trint Annotations
+
+If you have segmentation data in Trint (XMEML format), upload the XML export to trigger automatic conversion:
+
+```bash
+aws s3 cp my_video_export.xml \
+  s3://{ProjectName}-videos-{accountId}/config/trint_segments/ \
+  --profile <PROFILE>
+```
+
+Add transformation condition to the dispatcher lambda.
+
+The dispatcher triggers the ground truth converter, which parses clip boundaries and transcript markers from the XML and appends rows to the appropriate ground truth CSV.
+
+**Trint clip naming convention for segment types:**
+- `20260402CNN.mp4 - 5` → type `ignore` (just a number = unlabeled)
+- `20260402CNN.mp4 - 5 - n` → type `n` (news)
+- `20260402CNN.mp4 - 8 - c` → type `c` (commercial)
+- `20260402CNN.mp4 - 12 - t` → type `t` (tease)
+
+---
+
+## Optional: Color Profile Creation (Transition/Ticker Detection)
+
+Color profiles enable the transition detector to identify segment boundaries by visual appearance. Each video source needs its own profile that represents "what the content region looks like during primary content." Frames that deviate from the profile are classified as non-content (breaks/commercials).
+
+### Prerequisites
+
+```bash
+# Set up a local Python environment with OpenCV
+python3 -m venv .venv
+source .venv/bin/activate
+pip install opencv-python numpy
+```
+
+You also need:
+- Ground truth CSV for the target source (uploaded to processing bucket)
+- At least one video file from that source accessible locally
+
+### 1. Prepare Ground Truth
+
+The profile builder reads from a CSV with these columns:
+
+```csv
+file,segment_type,segment_start,segment_end,segment_transcript
+20260402CNN,n,3620,13313,""
+20260402CNN,c,13313,18500,""
+20260402CNN,n,18500,25032,""
+```
+
+It uses segments of type `n`, `p`, `t`, `g` (non-commercial) to build the profile — these are the frames where the ticker/overlay IS visible.
+
+### 2. Configure and Run the Profile Builder
+
+Edit `ColorProfile.py` before running:
+
+```python
+CSV_PATH = "ground_truth/cnn_ground_truth.csv"   # path to your ground truth
+VIDEO_DIR = "cnn_videos"                          # directory containing video files
+TARGET_TYPES = {"p", "n", "t", "g"}              # segment types to include in profile
+```
+
+The `filename` construction in `load_segments()` may need adjustment for your naming convention. By default it takes the first 8 chars of the `file` column and appends the network suffix.
+
+```bash
+cd backend/visual-detector   # or wherever ColorProfile.py lives
+python3 ColorProfile.py
+```
+
+Output: `color_profile.npy`
+
+### 3. Upload Profile to S3
+
+```bash
+aws s3 cp color_profile.npy \
+  s3://{ProjectName}-videos-{accountId}/config/profiles/{SOURCE}_profile.npy \
+  --profile <PROFILE>
+```
+
+Example:
+```bash
+aws s3 cp color_profile.npy s3://tvnews-videos-253223147348/config/profiles/CNN_profile.npy --profile vcil
+```
+
+### 4. Configure Detection Settings
+
+Upload or update the detection config JSON:
+
+```bash
+aws s3 cp - s3://{ProjectName}-videos-{accountId}/config/detection_config.json \
+  --content-type application/json --profile <PROFILE> <<'EOF'
+{
+  "CNN": {
+    "crop_top_fraction": 0.75,
+    "crop_bottom_fraction": 1.0,
+    "crop_left_fraction": 0.0,
+    "crop_right_fraction": 1.0,
+    "chi_square_threshold": 0.35,
+    "scan_fps": 0.5,
+    "profile_key": "config/profiles/CNN_profile.npy"
+  },
+  "FNC": {
+    "crop_top_fraction": 0.75,
+    "crop_bottom_fraction": 1.0,
+    "crop_left_fraction": 0.0,
+    "crop_right_fraction": 1.0,
+    "chi_square_threshold": 0.35,
+    "scan_fps": 0.5,
+    "profile_key": "config/profiles/FNC_profile.npy"
+  }
+}
+EOF
+```
+
+### Configuration Parameters
+
+| Parameter | Description | Tuning |
+|-----------|-------------|--------|
+| `crop_top_fraction` | Top of detection region (0.0=top of frame) | Set to where the persistent overlay starts |
+| `crop_bottom_fraction` | Bottom of detection region (1.0=bottom) | Usually 1.0 for tickers |
+| `crop_left_fraction` | Left edge (0.0=left) | Narrow to focus on specific overlay area |
+| `crop_right_fraction` | Right edge (1.0=right) | Narrow to exclude non-informative areas |
+| `chi_square_threshold` | Sensitivity (higher=more detections) | Start at 0.35, lower if too many false positives |
+| `scan_fps` | Frames sampled per second | 0.5 for large videos, 1.0 for shorter ones |
+| `profile_key` | S3 key for the .npy profile | Must match the uploaded profile path |
+
+### 5. When to Rebuild a Profile
+
+- Network updates their visual branding/ticker graphics
+- Detection accuracy drops on recent videos
+- Adding a new video source
+- Processing archival footage from a different era (the same network's 2005 graphics ≠ 2025 graphics)
+
+### 6. Testing a Profile
+
+After uploading, invoke the transition detector directly to test:
+
+```bash
+aws lambda invoke \
+  --function-name {ProjectName}-transition-detector-prod \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"s3_bucket":"{ProjectName}-videos-{accountId}","s3_key":"video/MY_VIDEO.mp4","video_name":"MY_VIDEO"}' \
+  /tmp/ticker_test.json && cat /tmp/ticker_test.json
+```
+
+Check the `segments_count` in the response. If 0 segments detected, the profile likely doesn't match — try lowering the threshold or rebuilding from more representative ground truth.
 
 ---
 
@@ -340,37 +703,7 @@ FRONTEND:
 - [ ] Frontend loads and displays segments
 
 ---
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| SAM build fails | Ensure Docker is running. Use `sam build --use-container` |
-| Layer wrong architecture | Clean: `rm -rf .aws-sam && sam build --use-container`. Check `BuildArchitecture: arm64` in template |
-| Bedrock 403 (SCP) | Ensure `bedrock:InvokeModel` allowed in target regions. Try a less restrictive account |
-| Bedrock 400 ("use inference profile") | Use `global.` or `us.` prefix, not raw model IDs |
-| Lambda throttling | Request quota increase to 1000. Reduce batch sizes until approved |
-| S3 trigger not firing | Check `get-bucket-notification-configuration`. Multipart uploads need `s3:ObjectCreated:*` not just `Put` |
-| Readiness Checker not triggering | Verify both transcript AND segment_results exist. Check filename extraction logic in logs |
-| Amplify deploy fails | Use `npm install` not `npm ci`. Pin CDK dependencies |
-| pydantic_core import error | Rebuild layer with `--use-container`. Verify `.so` files show `aarch64` |
-
----
-
-## Cost Estimates
-
-| Component | Per 1-hour video |
-|-----------|-----------------|
-| Visual Detection (Lambda + Step Functions) | ~$0.05 |
-| Transcription (AWS Transcribe) | ~$1.44 |
-| AI Segmentation (Bedrock Claude) | ~$0.60–$0.80 |
-| Sub-Segment Detection (Bedrock Claude) | ~$0.10–$0.30 |
-| **Total (full pipeline)** | **~$2.00–$2.50** |
-| **Total (transcripts already available)** | **~$0.75–$1.15** |
-
-Lambda free tier covers visual detection easily. AWS Transcribe charges $0.024/min. Bedrock has no free tier.
-
----
+***IMPORTANT***
 
 ## Customizing AI Prompts
 
@@ -547,3 +880,34 @@ To add a segment type (e.g., "interview") to the existing single-pass pipeline:
 | Fan-out | Multiple independent classifiers | Single trigger invokes N Lambdas |
 | Conditional | Only run on certain segment types | Check segment type in Lambda before processing |
 | Feedback loop | Human corrections improve next run | Edits saved to `edits/` prefix, loaded as few-shot examples |
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| SAM build fails | Ensure Docker is running. Use `sam build --use-container` |
+| Layer wrong architecture | Clean: `rm -rf .aws-sam && sam build --use-container`. Check `BuildArchitecture: arm64` in template |
+| Bedrock 403 (SCP) | Ensure `bedrock:InvokeModel` allowed in target regions. Try a less restrictive account |
+| Bedrock 400 ("use inference profile") | Use `global.` or `us.` prefix, not raw model IDs |
+| Lambda throttling | Request quota increase to 1000. Reduce batch sizes until approved |
+| S3 trigger not firing | Check `get-bucket-notification-configuration`. Multipart uploads need `s3:ObjectCreated:*` not just `Put` |
+| Readiness Checker not triggering | Verify both transcript AND segment_results exist. Check filename extraction logic in logs |
+| Amplify deploy fails | Use `npm install` not `npm ci`. Pin CDK dependencies |
+| pydantic_core import error | Rebuild layer with `--use-container`. Verify `.so` files show `aarch64` |
+
+---
+
+## Cost Estimates
+
+| Component | Per 1-hour video |
+|-----------|-----------------|
+| Visual Detection (Lambda + Step Functions) | ~$0.05 |
+| Transcription (AWS Transcribe) | ~$1.44 |
+| AI Segmentation (Bedrock Claude) | ~$0.60–$0.80 |
+| Sub-Segment Detection (Bedrock Claude) | ~$0.10–$0.30 |
+| **Total (full pipeline)** | **~$2.00–$2.50** |
+| **Total (transcripts already available)** | **~$0.75–$1.15** |
+
+Lambda free tier covers visual detection easily. AWS Transcribe charges $0.024/min. Bedrock has no free tier.
+
+---

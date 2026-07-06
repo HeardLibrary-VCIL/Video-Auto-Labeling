@@ -3,9 +3,10 @@ import os
 import cv2
 import numpy as np
 
-CSV_PATH = "ground_truth/fnc_ground_truth.csv"
-VIDEO_DIR = "fnc_videos"
-TARGET_TYPES = {"p", "n", "t"}
+# These must be customized for your desired segment types as labeled in your ground truth document
+CSV_PATH = "ground_truth/ground_truth.csv"
+VIDEO_DIR = "videos"
+TARGET_TYPES = {"p", "c", "t"}
 
 # Histogram parameters — HSV, fixed bins and ranges for all frames
 H_BINS = 36
@@ -15,7 +16,7 @@ HIST_SIZE = [H_BINS, S_BINS, V_BINS]
 HIST_RANGES = [0, 180, 0, 256, 0, 256]  # H: 0-180, S: 0-256, V: 0-256
 CHANNELS = [0, 1, 2]
 
-
+# These names must match the csv names
 def load_segments(csv_path):
     segments = []
     with open(csv_path, newline="") as f:

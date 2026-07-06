@@ -28,26 +28,6 @@ Video Upload
   → Web Frontend (React + Amplify)
 ```
 
-## Quick Start
-
-```bash
-# Prerequisites: AWS CLI, SAM CLI, Docker
-
-# 1. Deploy infrastructure
-cd backend/infrastructure
-sam build --use-container
-sam deploy --stack-name video-autolabeling \
-  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-  --resolve-s3 --resolve-image-repos \
-  --no-confirm-changeset
-
-# 2. Upload a video
-aws s3 cp my-video.mp4 s3://video-autolabeling-{accountId}/video/
-
-# 3. Results appear automatically
-aws s3 ls s3://video-autolabeling-{accountId}/result/
-```
-
 ## Project Structure
 
 ```
@@ -80,7 +60,7 @@ This pipeline is designed to be adapted to different video types:
 | What to Customize | Where | Example |
 |-------------------|-------|---------|
 | Segment types | `ai-segmentation/prompts.py` | News, Commercial, Interview, Sports |
-| Visual detection method | `visual-detector/worker.py` | Black frames, logos |
+| Visual detection method | `visual-detector/worker.py` | Black frames, tickers |
 | Transition types | `transition-detector/prompts.py` | Teaser, preview, recap |
 | AI model | Template parameter `BedrockModelId` | Claude Sonnet, Haiku |
 | Timeline colors | `frontend/src/utils/segment_types.ts` | Per-type color mapping |
@@ -94,8 +74,8 @@ This pipeline is designed to be adapted to different video types:
 
 ## Documentation
 
-- [Deployment Guide](PRODUCTION_DEPLOYMENT.md) — Full setup instructions
-- [Landing Page](landing-page/) — Project overview site (GitHub Pages)
+- [Deployment Guide](PRODUCTION_DEPLOYMENT.md) — Setup instructions
+- [Video-Auto-Labeling website with demo and feature overview](https://heardlibrary-vcil.github.io/Video-Auto-Labeling/)
 
 ## License
 
