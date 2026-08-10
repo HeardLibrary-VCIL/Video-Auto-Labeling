@@ -1,0 +1,386 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentScriptType="application/ecmascript" contentStyleType="text/css" height="1342px" preserveAspectRatio="none" style="width:1390px;height:1342px;" version="1.1" viewBox="0 0 1390 1342" width="1390px" zoomAndPan="magnify"><defs><filter height="300%" id="fmzc9e0jz3rox" width="300%" x="-1" y="-1"><feGaussianBlur result="blurOut" stdDeviation="2.0"/><feColorMatrix in="blurOut" result="blurOut2" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .4 0"/><feOffset dx="4.0" dy="4.0" in="blurOut2" result="blurOut3"/><feBlend in="SourceGraphic" in2="blurOut3" mode="normal"/></filter></defs><g><text fill="#232F3E" font-family="Segoe UI" font-size="18" font-weight="bold" lengthAdjust="spacing" textLength="264" x="555.5" y="17.4023">Video Auto-Labeling System</text><text fill="#555555" font-family="Segoe UI" font-size="12" lengthAdjust="spacing" textLength="289" x="543" y="32.8008">Backend Pipeline + Segmentation Review Platform</text><!--MD5=[6328af41db0f7dbb733c9192827ed26b]
+cluster pipeline--><polygon fill="#EEF4FB" filter="url(#fmzc9e0jz3rox)" points="545.5,41.332,743.5,41.332,750.5,60.2871,1183.5,60.2871,1183.5,1122.272,545.5,1122.272,545.5,41.332" style="stroke:#4A90D9;stroke-width:1.5;"/><line style="stroke:#4A90D9;stroke-width:1.5;" x1="545.5" x2="750.5" y1="60.2871" y2="60.2871"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="192" x="549.5" y="53.9668">Backend Pipeline (AWS Serverless)</text><!--MD5=[e6932b17b7928a5f1fdeb958c66edbc4]
+cluster visual--><polygon fill="#EEF4FB" filter="url(#fmzc9e0jz3rox)" points="767.5,344.062,865.5,344.062,872.5,363.0171,1159.5,363.0171,1159.5,477.882,767.5,477.882,767.5,344.062" style="stroke:#4A90D9;stroke-width:1.5;"/><line style="stroke:#4A90D9;stroke-width:1.5;" x1="767.5" x2="872.5" y1="363.0171" y2="363.0171"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="92" x="771.5" y="356.6968">Visual Detection</text><!--MD5=[9c85c30a42fdb0134cd2452887ef5f91]
+cluster audio--><polygon fill="#EEF4FB" filter="url(#fmzc9e0jz3rox)" points="569.5,350.542,636.5,350.542,643.5,369.4971,743.5,369.4971,743.5,471.402,569.5,471.402,569.5,350.542" style="stroke:#4A90D9;stroke-width:1.5;"/><line style="stroke:#4A90D9;stroke-width:1.5;" x1="569.5" x2="643.5" y1="369.4971" y2="369.4971"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="61" x="573.5" y="363.1768">Audio &amp; AI</text><!--MD5=[d32af45e95defee4e636333a21558966]
+cluster aiclass--><polygon fill="#EEF4FB" filter="url(#fmzc9e0jz3rox)" points="633.5,708.292,732.5,708.292,739.5,727.2471,823.5,727.2471,823.5,975.452,633.5,975.452,633.5,708.292" style="stroke:#4A90D9;stroke-width:1.5;"/><line style="stroke:#4A90D9;stroke-width:1.5;" x1="633.5" x2="739.5" y1="727.2471" y2="727.2471"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="93" x="637.5" y="720.9268">AI Classification</text><!--MD5=[dce4c2b5694dd28223e7b1d160ba96c4]
+cluster data--><polygon fill="#EEF4FB" filter="url(#fmzc9e0jz3rox)" points="205.5,1179.272,269.5,1179.272,276.5,1198.2271,693.5,1198.2271,693.5,1335.052,205.5,1335.052,205.5,1179.272" style="stroke:#4A90D9;stroke-width:1.5;"/><line style="stroke:#4A90D9;stroke-width:1.5;" x1="205.5" x2="276.5" y1="1198.2271" y2="1198.2271"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="58" x="209.5" y="1191.9068">Data Layer</text><!--MD5=[d841c4c2f84d4e18d352f800547f43fc]
+cluster platform--><polygon fill="#E8F5E9" filter="url(#fmzc9e0jz3rox)" points="214.5,534.882,392.5,534.882,399.5,553.8371,402.5,553.8371,402.5,1122.272,214.5,1122.272,214.5,534.882" style="stroke:#4A90D9;stroke-width:1.5;"/><line style="stroke:#4A90D9;stroke-width:1.5;" x1="214.5" x2="399.5" y1="553.8371" y2="553.8371"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="172" x="218.5" y="547.5168">Segmentation Review Platform</text><!--MD5=[e01c7797de57a2539a89e991e20da863]
+entity s3upload--><rect fill="#FFE0B2" filter="url(#fmzc9e0jz3rox)" height="45.9102" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="110" x="1028.5" y="87.332"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="90" x="1038.5" y="107.9668">S3 Video Bucket</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="67" x="1038.5" y="120.9219">video/*.mp4</text><!--MD5=[2b5b80f7068c6a16f141d16022e08ad4]
+entity dispatcher--><rect fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" height="58.8652" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="168" x="851.5" y="214.202"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="96" x="861.5" y="234.8368">Video Dispatcher</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="42" x="861.5" y="247.7919">Lambda</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="148" x="861.5" y="260.747">Routes to detection method</text><!--MD5=[887a2aa36d0d06f395fabe51760646dc]
+entity readiness--><rect fill="#E8F5E9" filter="url(#fmzc9e0jz3rox)" height="71.8203" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="135" x="796" y="574.402"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="84" x="806" y="595.0368">Readiness Gate</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="42" x="806" y="607.9919">Lambda</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="115" x="806" y="620.947">Waits for transcript +</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="86" x="806" y="633.902">visual segments</text><!--MD5=[fe4296792a315c233a22fe5ecdaa6c57]
+entity merger--><rect fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" height="71.8203" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="120" x="561.5" y="1034.452"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="84" x="571.5" y="1055.0868">Results Merger</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="42" x="571.5" y="1068.0419">Lambda</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="92" x="571.5" y="1080.997">Unified JSON with</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="100" x="571.5" y="1093.952">titles + transcripts</text><!--MD5=[4b4168ef481ac362e75868279e690978]
+entity eval--><rect fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" height="71.8203" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="158" x="750.5" y="1034.452"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="59" x="760.5" y="1055.0868">Evaluation</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="42" x="760.5" y="1068.0419">Lambda</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="138" x="760.5" y="1080.997">F1, IoU, boundary metrics</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="85" x="760.5" y="1093.952">vs ground truth</text><!--MD5=[657a75219ecc890972f01f38c8d320b0]
+entity blackframe--><rect fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" height="71.8203" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="164" x="979.5" y="390.062"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="119" x="989.5" y="410.6968">Black Frame Detector</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="91" x="989.5" y="423.6519">Step Functions +</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="144" x="989.5" y="436.607">Worker Lambdas (OpenCV)</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="126" x="989.5" y="449.562">800 concurrent chunks</text><!--MD5=[33f55a7f472f45b5d125c59a6bba3cb0]
+entity ticker--><rect fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" height="58.8652" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="161" x="783" y="396.542"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="128" x="793" y="417.1768">Profile-Based Detector</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="122" x="793" y="430.1319">Docker Lambda (10GB)</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="141" x="793" y="443.087">Color histogram matching</text><!--MD5=[86336df203d15e7b43b233c4f2c81c18]
+entity transcribe--><rect fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" height="58.8652" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="143" x="585" y="396.542"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="88" x="595" y="417.1768">AWS Transcribe</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="82" x="595" y="430.1319">Lambda trigger</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="123" x="595" y="443.087">Word-level timestamps</text><!--MD5=[35356a8f1e9a2029371756c3fd4bf621]
+entity aiseg--><rect fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" height="58.8652" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="159" x="649" y="754.292"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="91" x="659" y="774.9268">AI Segmentation</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="131" x="659" y="787.8819">Bedrock (Claude Sonnet)</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="139" x="659" y="800.837">Topic &amp; speaker detection</text><!--MD5=[8d1d2fa55d93ee9ac8d8d749e1f0a734]
+entity teaser--><rect fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" height="71.8203" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="158" x="649.5" y="887.632"/><rect fill="#232F3E" height="3.5" style="stroke:#232F3E;stroke-width:0.0;" width="3.5" x="672.5" y="902.5871"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="120" x="677.5" y="908.2668">Sub-Segment / Teaser</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="61" x="659.5" y="921.2219">Detection**</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="91" x="659.5" y="934.177">Bedrock (Claude)</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="96" x="659.5" y="947.132">Transition speech</text><!--MD5=[03851bda8ea04639b4eeacc45399c62d]
+entity s3results--><path d="M396,1235.272 C396,1225.272 463.5,1225.272 463.5,1225.272 C463.5,1225.272 531,1225.272 531,1235.272 L531,1309.0474 C531,1319.0474 463.5,1319.0474 463.5,1319.0474 C463.5,1319.0474 396,1319.0474 396,1309.0474 L396,1235.272 " fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" style="stroke:#232F3E;stroke-width:1.5;"/><path d="M396,1235.272 C396,1245.272 463.5,1245.272 463.5,1245.272 C463.5,1245.272 531,1245.272 531,1235.272 " fill="none" style="stroke:#232F3E;stroke-width:1.5;"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="58" x="406" y="1259.9068">S3 Results</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="95" x="406" y="1272.8619">segment_results/</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="58" x="406" y="1285.817">ai_results/</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="115" x="406" y="1298.772">subsegment_results/</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="37" x="406" y="1311.7271">result/</text><!--MD5=[a237f9f665c8ad6fc6141731826af3fb]
+entity dynamo--><path d="M566,1248.232 C566,1238.232 621.5,1238.232 621.5,1238.232 C621.5,1238.232 677,1238.232 677,1248.232 L677,1296.0973 C677,1306.0973 621.5,1306.0973 621.5,1306.0973 C621.5,1306.0973 566,1306.0973 566,1296.0973 L566,1248.232 " fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" style="stroke:#232F3E;stroke-width:1.5;"/><path d="M566,1248.232 C566,1258.232 621.5,1258.232 621.5,1258.232 C621.5,1258.232 677,1258.232 677,1248.232 " fill="none" style="stroke:#232F3E;stroke-width:1.5;"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="62" x="576" y="1272.8668">DynamoDB</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="91" x="576" y="1285.8219">Segment records</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="64" x="576" y="1298.777">Eval metrics</text><!--MD5=[78922e3f719f32bf869a7a66bdadb0f4]
+entity rds--><path d="M221.5,1248.232 C221.5,1238.232 291.5,1238.232 291.5,1238.232 C291.5,1238.232 361.5,1238.232 361.5,1248.232 L361.5,1296.0973 C361.5,1306.0973 291.5,1306.0973 291.5,1306.0973 C291.5,1306.0973 221.5,1306.0973 221.5,1296.0973 L221.5,1248.232 " fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" style="stroke:#232F3E;stroke-width:1.5;"/><path d="M221.5,1248.232 C221.5,1258.232 291.5,1258.232 291.5,1258.232 C291.5,1258.232 361.5,1258.232 361.5,1248.232 " fill="none" style="stroke:#232F3E;stroke-width:1.5;"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="98" x="231.5" y="1272.8668">RDS (PostgreSQL)</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="92" x="231.5" y="1285.8219">Catalog database</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="120" x="231.5" y="1298.777">Approved annotations</text><!--MD5=[6cf70d0668e40514fb15ac1484c30c2e]
+entity amplify--><rect fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" height="58.8652" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="121" x="259" y="580.882"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="73" x="269" y="601.5168">AWS Amplify</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="101" x="269" y="614.4719">React + TypeScript</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="72" x="269" y="627.427">Cognito Auth</text><!--MD5=[9f43605499e666e0d2acf7c8b3c59468]
+entity videoselect--><rect fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" height="58.8652" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="114" x="259.5" y="754.292"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="68" x="269.5" y="774.9268">Video Select</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="88" x="269.5" y="787.8819">Browse &amp; search</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="94" x="269.5" y="800.837">processed videos</text><!--MD5=[fd01210c268511dfcaf9d6c7c067c6b3]
+entity viewer--><rect fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" height="58.8652" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="144" x="236.5" y="894.112"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="83" x="246.5" y="914.7468">Results Viewer</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="101" x="246.5" y="927.7019">Interactive timeline</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="124" x="246.5" y="940.657">Color-coded segments</text><!--MD5=[15a45886d478188cd09dda7556634827]
+entity editmode--><rect fill="#F5F8FC" filter="url(#fmzc9e0jz3rox)" height="71.8203" rx="5" ry="5" style="stroke:#232F3E;stroke-width:1.5;" width="137" x="238" y="1034.452"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="56" x="248" y="1055.0868">Edit Mode</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="90" x="248" y="1068.0419">Drag boundaries</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="117" x="248" y="1080.997">Merge/split segments</text><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="84" x="248" y="1093.952">Approve &amp; save</text><!--MD5=[ffa2baf2c2253645cad77eb024756c87]
+entity archivist--><ellipse cx="1223.5" cy="580.842" fill="#232F3E" filter="url(#fmzc9e0jz3rox)" rx="8" ry="8" style="stroke:#A80036;stroke-width:1.5;"/><path d="M1223.5,588.842 L1223.5,615.842 M1210.5,596.842 L1236.5,596.842 M1223.5,615.842 L1210.5,630.842 M1223.5,615.842 L1236.5,630.842 " fill="none" filter="url(#fmzc9e0jz3rox)" style="stroke:#A80036;stroke-width:1.5;"/><text fill="#232F3E" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="48" x="1199.5" y="646.9768">Archivist</text><path d="M1200,752.812 L1200,814.6323 A0,0 0 0 0 1200,814.6323 L1371,814.6323 A0,0 0 0 0 1371,814.6323 L1371,762.812 L1361,752.812 L1214.75,752.812 L931.3,638.852 L1206.75,752.812 L1200,752.812 A0,0 0 0 0 1200,752.812 " fill="#FFF8E1" filter="url(#fmzc9e0jz3rox)" style="stroke:#FFA000;stroke-width:1.0;"/><path d="M1361,752.812 L1361,762.812 L1371,762.812 L1361,752.812 " fill="#FFF8E1" style="stroke:#FFA000;stroke-width:1.0;"/><text fill="#333333" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="84" x="1206" y="768.4468">Readiness Gate</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="62" x="1290" y="768.4468">: AI pipeline</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="148" x="1206" y="781.4019">only fires when BOTH visual</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="150" x="1206" y="794.357">detection AND transcription</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="147" x="1206" y="807.312">have completed for a video.</text><path d="M1200,395.062 L1200,456.8823 L1381,456.8823 L1381,405.062 L1371,395.062 L1200,395.062 " fill="#FFF8E1" filter="url(#fmzc9e0jz3rox)" style="stroke:#FFA000;stroke-width:1.0;"/><path d="M1371,395.062 L1371,405.062 L1381,405.062 L1371,395.062 " fill="#FFF8E1" style="stroke:#FFA000;stroke-width:1.0;"/><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="142" x="1206" y="410.6968">Fallback: if profile detector</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="160" x="1206" y="423.6519">finds 0 segments (wrong era),</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="117" x="1206" y="436.607">automatically triggers</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="118" x="1206" y="449.562">black frame detection.</text><path d="M6,1234.772 L6,1309.5474 L187,1309.5474 L187,1244.772 L177,1234.772 L6,1234.772 " fill="#FFF8E1" filter="url(#fmzc9e0jz3rox)" style="stroke:#FFA000;stroke-width:1.0;"/><path d="M177,1234.772 L177,1244.772 L187,1244.772 L177,1234.772 " fill="#FFF8E1" style="stroke:#FFA000;stroke-width:1.0;"/><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="155" x="12" y="1250.4068">Archivists correct any errors</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="154" x="12" y="1263.3619">in the automated labels, then</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="160" x="12" y="1276.317">approve segments for catalog</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="146" x="12" y="1289.272">ingest. Human-in-the-loop</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="130" x="12" y="1302.2271">ensures archival quality.</text><path d="M1200,79.382 L1200,106.292 L1138.61,110.292 L1200,114.292 L1200,141.2023 A0,0 0 0 0 1200,141.2023 L1373,141.2023 A0,0 0 0 0 1373,141.2023 L1373,89.382 L1363,79.382 L1200,79.382 A0,0 0 0 0 1200,79.382 " fill="#FFF8E1" filter="url(#fmzc9e0jz3rox)" style="stroke:#FFA000;stroke-width:1.0;"/><path d="M1363,79.382 L1363,89.382 L1373,89.382 L1363,79.382 " fill="#FFF8E1" style="stroke:#FFA000;stroke-width:1.0;"/><text fill="#333333" font-family="Segoe UI" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="42" x="1206" y="95.0168">Trigger</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="110" x="1248" y="95.0168">: Any .mp4 uploaded</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="138" x="1206" y="107.9719">to the video/ prefix starts</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="139" x="1206" y="120.927">the pipeline automatically.</text><text fill="#333333" font-family="Segoe UI" font-size="11" lengthAdjust="spacing" textLength="137" x="1206" y="133.882">~$1.50 per hour of video.</text><!--MD5=[5c48d2ff3b58937b7353e0b8f1d95566]
+link s3upload to dispatcher--><path d="M1058.39,133.572 C1034.85,154.462 999.35,185.962 972.55,209.752 " fill="none" id="s3upload-to-dispatcher" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="969.13,212.792,978.5134,209.8002,972.8663,209.4693,973.1971,203.8222,969.13,212.792" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="77" x="1014.94" y="181.87">S3 event trigger</text><!--MD5=[8a036a78d774268a41aa5e30506ae479]
+link dispatcher to blackframe--><path d="M965.75,273.402 C974.55,282.482 983.84,292.832 991.5,303.062 C1010.53,328.472 1028.29,359.532 1041.16,383.942 " fill="none" id="dispatcher-to-blackframe" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="1043.46,388.342,1042.8367,378.5129,1041.1442,383.9106,1035.7465,382.2181,1043.46,388.342" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="34" x="1025.36" y="313.73">MSNBC</text><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="69" x="1007.86" y="325.5073">(black frames)</text><!--MD5=[77a1d18eeb0492e46dd5eb8e05da7742]
+link dispatcher to ticker--><path d="M924.09,273.202 C911.38,305.032 890.85,356.472 877.26,390.512 " fill="none" id="dispatcher-to-ticker" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="875.54,394.832,882.5964,387.9613,877.397,390.1896,875.1686,384.9902,875.54,394.832" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="51" x="921.16" y="313.73">CNN / FNC</text><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="71" x="911.16" y="325.5073">(profile match)</text><!--MD5=[9684bcd10bab33a76e110017fd976f56]
+link dispatcher to transcribe--><path d="M876.48,273.492 C843.58,290.382 802.34,312.892 767.5,336.062 C742,353.022 715.14,374.422 694.24,391.982 " fill="none" id="dispatcher-to-transcribe" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="690.49,395.152,699.9489,392.4079,694.3123,391.9287,694.7916,386.2922,690.49,395.152" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="46" x="822.32" y="319.73">all videos</text><!--MD5=[2609014d61b580587f7b858cb5d02670]
+link blackframe to readiness--><path d="M1023.32,462.132 C989.88,492.932 941.31,537.662 906.5,569.712 " fill="none" id="blackframe-to-readiness" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="903.01,572.932,912.344,569.7893,906.6922,569.5495,906.932,563.8978,903.01,572.932" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="85" x="987.06" y="510.55">segment_results/</text><!--MD5=[cf3ab99806b0fed5af98b31bab7c6a12]
+link ticker to readiness--><path d="M863.5,455.862 C863.5,486.022 863.5,533.592 863.5,567.782 " fill="none" id="ticker-to-readiness" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="863.5,572.482,867.5,563.482,863.5,567.482,859.5,563.482,863.5,572.482" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="85" x="864.5" y="510.55">segment_results/</text><!--MD5=[99bdbc91f7f9fc792ef7144fc38d099d]
+link transcribe to readiness--><path d="M655.67,455.822 C656.54,475.452 660.66,501.012 674.5,518.882 C702.84,555.482 749.7,578.032 789.67,591.472 " fill="none" id="transcribe-to-readiness" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="794.07,592.912,786.7609,586.3107,789.3181,591.3566,784.2722,593.9138,794.07,592.912" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="72" x="675.5" y="510.55">transcriptions/</text><!--MD5=[350a1f670d0fd376fd6125c5774d2679]
+link readiness to aiseg--><path d="M835.85,646.412 C812.23,676.412 778.45,719.302 755.12,748.922 " fill="none" id="readiness-to-aiseg" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="752.12,752.732,760.8352,748.1446,755.2173,748.8069,754.555,743.1889,752.12,752.732" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="96" x="809.09" y="689.96">both artifacts ready</text><!--MD5=[603919d328c1cd3a91ac0872e7e262a0]
+link aiseg to teaser--><path d="M728.5,813.622 C728.5,833.162 728.5,859.272 728.5,881.032 " fill="none" id="aiseg-to-teaser" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="728.5,885.822,732.5,876.822,728.5,880.822,724.5,876.822,728.5,885.822" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="52" x="729.5" y="855.3">ai_results/</text><!--MD5=[deb4c52486e9d44212a18f2571eee5f1]
+link teaser to merger--><path d="M702.6,959.602 C687.14,980.532 667.44,1007.182 651.34,1028.982 " fill="none" id="teaser-to-merger" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="648.43,1032.912,656.9996,1028.058,651.4048,1028.8932,650.5695,1023.2984,648.43,1032.912" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="102" x="679.21" y="1002.12">subsegment_results/</text><!--MD5=[319c3dd7ff27c26f80821cff5181271a]
+link merger to eval--><path d="M681.94,1070.362 C701.29,1070.362 723.09,1070.362 743.89,1070.362 " fill="none" id="merger-to-eval" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="748.79,1070.362,739.79,1066.362,743.79,1070.362,739.79,1074.362,748.79,1070.362" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="33" x="699.5" y="1065.03">result/</text><!--MD5=[c78df48d2a86eebb0f243bfaa696e66f]
+link merger to s3results--><path d="M561.25,1104.852 C547.63,1114.382 534.09,1125.652 523.5,1138.272 C503.76,1161.802 489.26,1192.882 479.46,1219.062 " fill="none" id="merger-to-s3results" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="477.84,1223.492,484.7007,1216.4259,479.5659,1218.7993,477.1924,1213.6645,477.84,1223.492" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="88" x="524.5" y="1154.94">result/{video}.json</text><!--MD5=[8af73da2f0c0f18d9f9a975cb1dbf74e]
+link merger to dynamo--><path d="M621.5,1106.622 C621.5,1141.682 621.5,1195.342 621.5,1231.772 " fill="none" id="merger-to-dynamo" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="621.5,1236.402,625.5,1227.402,621.5,1231.402,617.5,1227.402,621.5,1236.402" style="stroke:#4A90D9;stroke-width:1.0;"/><!--MD5=[162ecbc27a14b5be317ea2c915039840]
+link eval to dynamo--><path d="M792.79,1106.622 C755.7,1142.262 698.58,1197.122 660.64,1233.562 " fill="none" id="eval-to-dynamo" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="657.2,1236.872,666.4621,1233.5233,660.8064,1233.4088,660.9209,1227.7531,657.2,1236.872" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="59" x="757.28" y="1154.94">eval metrics</text><!--MD5=[ff088c10dc671d89818d7d9ba79c6808]
+link s3results to amplify--><path d="M458.77,1224.792 C455.05,1184.332 450.5,1124.032 450.5,1071.362 C450.5,782.722 450.5,782.722 450.5,782.722 C450.5,725.192 403.34,674.992 365.61,644.032 " fill="none" id="s3results-to-amplify" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="361.77,640.932,366.2521,649.7019,365.6576,644.0764,371.2831,643.4818,361.77,640.932" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="77" x="451.5" y="921.71">Amplify Storage</text><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="64" x="458" y="933.4873">(read results)</text><!--MD5=[3b63f15ecf4d846a37a601d30ba13de3]
+link amplify to videoselect--><path d="M319,640.002 C318.48,669.672 317.67,716.012 317.11,747.792 " fill="none" id="amplify-to-videoselect" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="317.03,752.432,321.1837,743.5019,317.1157,747.4328,313.1849,743.3648,317.03,752.432" style="stroke:#4A90D9;stroke-width:1.0;"/><!--MD5=[87ee97a5d504db984309f73e6437acb4]
+link videoselect to viewer--><path d="M314.82,813.622 C313.57,835.122 311.87,864.572 310.54,887.432 " fill="none" id="videoselect-to-viewer" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="310.26,892.182,314.7684,883.4256,310.5461,887.1902,306.7815,882.9679,310.26,892.182" style="stroke:#4A90D9;stroke-width:1.0;"/><!--MD5=[06487d5eceb2eb666423e020e7bf5945]
+link viewer to editmode--><path d="M308.1,953.162 C307.81,974.492 307.4,1003.962 307.07,1027.882 " fill="none" id="viewer-to-editmode" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="307.01,1032.642,311.1382,1023.7001,307.0814,1027.6425,303.139,1023.5858,307.01,1032.642" style="stroke:#4A90D9;stroke-width:1.0;"/><!--MD5=[888e7d57bf30836678f8ba45345dc78a]
+link editmode to s3results--><path d="M312.44,1106.602 C317.5,1126.012 326.75,1148.982 343.5,1163.272 C355.64,1173.632 364.86,1163.002 378.5,1171.272 C398.61,1183.472 416.33,1202.092 430.31,1219.962 " fill="none" id="editmode-to-s3results" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="433.24,1223.772,430.9248,1214.1992,430.1921,1219.8084,424.5829,1219.0757,433.24,1223.772" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="79" x="344.5" y="1154.94">save corrections</text><!--MD5=[47622a12b6a4c34a9421beffe7c1fd2b]
+link editmode to rds--><path d="M255.74,1106.612 C246.31,1115.742 237.77,1126.402 232.5,1138.272 C218.33,1170.202 236.72,1206.442 256.61,1233.002 " fill="none" id="editmode-to-rds" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="259.41,1236.652,257.1114,1227.0752,256.369,1232.6831,250.7611,1231.9407,259.41,1236.652" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="58" x="239" y="1148.94">approved →</text><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="69" x="233.5" y="1160.7173">catalog ingest</text><!--MD5=[1608cae4e1a920c01f038a6d28e8136b]
+link archivist to amplify--><path d="M1214.44,570.942 C1208.51,554.442 1198.89,536.802 1183.5,526.882 C1123.92,488.472 615.03,513.052 545.5,526.882 C490.15,537.902 430.35,560.482 386.18,579.382 " fill="none" id="archivist-to-amplify" style="stroke:#4A90D9;stroke-width:1.0;"/><polygon fill="#4A90D9" points="381.72,581.302,391.568,581.4333,386.3157,579.3324,388.4166,574.0802,381.72,581.302" style="stroke:#4A90D9;stroke-width:1.0;"/><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="24" x="767.5" y="504.55">login</text><text fill="#555555" font-family="Segoe UI" font-size="10" lengthAdjust="spacing" textLength="44" x="757.5" y="516.3273">(Cognito)</text><!--MD5=[5444c264217ffcf9af2f94e77e078bf2]
+link ticker to GMN50--><path d="M881.44,396.122 C901.15,366.552 935.82,323.082 979,304.562 C1045.58,276.012 1073.77,280.222 1142,304.562 C1192.03,322.412 1237.36,365.152 1264.43,394.832 " fill="none" id="ticker-GMN50" style="stroke:#4A90D9;stroke-width:1.0;stroke-dasharray:7.0,7.0;"/><!--MD5=[dd1eb357fddfb1f326cc05b772bc6a5a]
+link editmode to GMN53--><path d="M257.92,1106.432 C245.07,1116.312 231.46,1127.362 219.5,1138.272 C186.18,1168.692 151.57,1206.762 127.58,1234.352 " fill="none" id="editmode-GMN53" style="stroke:#4A90D9;stroke-width:1.0;stroke-dasharray:7.0,7.0;"/><!--MD5=[a88422c6c2ef412d8d1f7784ca834a5e]
+@startuml Video Auto-Labeling Architecture
+
+!define AWSPuml https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v18.0/dist
+' Fallback: if the AWS icons can't be fetched, this still renders as a clean diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam defaultFontColor #232F3E
+
+skinparam rectangle {
+  BackgroundColor #F5F8FC
+  BorderColor #232F3E
+  RoundCorner 10
+  FontColor #232F3E
+}
+
+skinparam database {
+  BackgroundColor #F5F8FC
+  BorderColor #232F3E
+  FontColor #232F3E
+}
+
+skinparam arrow {
+  Color #4A90D9
+  FontColor #555555
+  FontSize 10
+}
+
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #FFA000
+  FontColor #333333
+}
+
+skinparam package {
+  BackgroundColor #EEF4FB
+  BorderColor #4A90D9
+  FontColor #232F3E
+}
+
+title <font size=18 color=#232F3E><b>Video Auto-Labeling System</b></font>\n<font size=12 color=#555555>Backend Pipeline + Segmentation Review Platform</font>
+
+' ═══════════════════════════════════════════════════════════════
+' ACTORS
+' ═══════════════════════════════════════════════════════════════
+
+actor "Archivist" as archivist #232F3E
+
+' ═══════════════════════════════════════════════════════════════
+' BACKEND PIPELINE
+' ═══════════════════════════════════════════════════════════════
+
+package "Backend Pipeline (AWS Serverless)" as pipeline {
+
+  rectangle "**S3 Video Bucket**\nvideo/*.mp4" as s3upload #FFE0B2
+
+  rectangle "**Video Dispatcher**\nLambda\nRoutes to detection method" as dispatcher
+
+  package "Visual Detection" as visual {
+    rectangle "**Black Frame Detector**\nStep Functions +\nWorker Lambdas (OpenCV)\n800 concurrent chunks" as blackframe
+    rectangle "**Profile-Based Detector**\nDocker Lambda (10GB)\nColor histogram matching" as ticker
+  }
+
+  package "Audio & AI" as audio {
+    rectangle "**AWS Transcribe**\nLambda trigger\nWord-level timestamps" as transcribe
+  }
+
+  rectangle "**Readiness Gate**\nLambda\nWaits for transcript +\nvisual segments" as readiness #E8F5E9
+
+  package "AI Classification" as aiclass {
+    rectangle "**AI Segmentation**\nBedrock (Claude Sonnet)\nTopic & speaker detection" as aiseg
+    rectangle "**Sub-Segment / Teaser\nDetection**\nBedrock (Claude)\nTransition speech" as teaser
+  }
+
+  rectangle "**Results Merger**\nLambda\nUnified JSON with\ntitles + transcripts" as merger
+
+  rectangle "**Evaluation**\nLambda\nF1, IoU, boundary metrics\nvs ground truth" as eval
+}
+
+' ═══════════════════════════════════════════════════════════════
+' DATA STORES
+' ═══════════════════════════════════════════════════════════════
+
+package "Data Layer" as data {
+  database "**S3 Results**\nsegment_results/\nai_results/\nsubsegment_results/\nresult/" as s3results
+  database "**DynamoDB**\nSegment records\nEval metrics" as dynamo
+  database "**RDS (PostgreSQL)**\nCatalog database\nApproved annotations" as rds
+}
+
+' ═══════════════════════════════════════════════════════════════
+' SEGMENTATION REVIEW PLATFORM (FRONTEND)
+' ═══════════════════════════════════════════════════════════════
+
+package "Segmentation Review Platform" as platform #E8F5E9 {
+  rectangle "**AWS Amplify**\nReact + TypeScript\nCognito Auth" as amplify
+  rectangle "**Video Select**\nBrowse & search\nprocessed videos" as videoselect
+  rectangle "**Results Viewer**\nInteractive timeline\nColor-coded segments" as viewer
+  rectangle "**Edit Mode**\nDrag boundaries\nMerge/split segments\nApprove & save" as editmode
+}
+
+' ═══════════════════════════════════════════════════════════════
+' CONNECTIONS — Pipeline Flow
+' ═══════════════════════════════════════════════════════════════
+
+s3upload -down-> dispatcher : S3 event trigger
+
+dispatcher -down-> blackframe : MSNBC\n(black frames)
+dispatcher -down-> ticker : CNN / FNC\n(profile match)
+dispatcher -right-> transcribe : all videos
+
+blackframe -down-> readiness : segment_results/
+ticker -down-> readiness : segment_results/
+transcribe -down-> readiness : transcriptions/
+
+readiness -down-> aiseg : both artifacts ready
+
+aiseg -down-> teaser : ai_results/
+teaser -down-> merger : subsegment_results/
+merger -right-> eval : result/
+
+' ═══════════════════════════════════════════════════════════════
+' CONNECTIONS — Storage
+' ═══════════════════════════════════════════════════════════════
+
+merger -down-> s3results : result/{video}.json
+merger -down-> dynamo
+eval -down-> dynamo : eval metrics
+
+' ═══════════════════════════════════════════════════════════════
+' CONNECTIONS — Frontend
+' ═══════════════════════════════════════════════════════════════
+
+s3results -down-> amplify : Amplify Storage\n(read results)
+amplify - -> videoselect
+videoselect - -> viewer
+viewer - -> editmode
+
+editmode -down-> s3results : save corrections
+editmode -down-> rds : approved →\ncatalog ingest
+
+archivist -right-> amplify : login\n(Cognito)
+
+' ═══════════════════════════════════════════════════════════════
+' NOTES
+' ═══════════════════════════════════════════════════════════════
+
+note bottom of readiness
+  **Readiness Gate**: AI pipeline
+  only fires when BOTH visual
+  detection AND transcription
+  have completed for a video.
+end note
+
+note right of ticker
+  Fallback: if profile detector
+  finds 0 segments (wrong era),
+  automatically triggers
+  black frame detection.
+end note
+
+note bottom of editmode
+  Archivists correct any errors
+  in the automated labels, then
+  approve segments for catalog
+  ingest. Human-in-the-loop
+  ensures archival quality.
+end note
+
+note right of s3upload
+  **Trigger**: Any .mp4 uploaded
+  to the video/ prefix starts
+  the pipeline automatically.
+  ~$1.50 per hour of video.
+end note
+
+@enduml
+
+@startuml Video Auto-Labeling Architecture
+
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam defaultFontColor #232F3E
+
+skinparam rectangle {
+  BackgroundColor #F5F8FC
+  BorderColor #232F3E
+  RoundCorner 10
+  FontColor #232F3E
+}
+
+skinparam database {
+  BackgroundColor #F5F8FC
+  BorderColor #232F3E
+  FontColor #232F3E
+}
+
+skinparam arrow {
+  Color #4A90D9
+  FontColor #555555
+  FontSize 10
+}
+
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #FFA000
+  FontColor #333333
+}
+
+skinparam package {
+  BackgroundColor #EEF4FB
+  BorderColor #4A90D9
+  FontColor #232F3E
+}
+
+title <font size=18 color=#232F3E><b>Video Auto-Labeling System</b></font>\n<font size=12 color=#555555>Backend Pipeline + Segmentation Review Platform</font>
+
+
+actor "Archivist" as archivist #232F3E
+
+
+package "Backend Pipeline (AWS Serverless)" as pipeline {
+
+  rectangle "**S3 Video Bucket**\nvideo/*.mp4" as s3upload #FFE0B2
+
+  rectangle "**Video Dispatcher**\nLambda\nRoutes to detection method" as dispatcher
+
+  package "Visual Detection" as visual {
+    rectangle "**Black Frame Detector**\nStep Functions +\nWorker Lambdas (OpenCV)\n800 concurrent chunks" as blackframe
+    rectangle "**Profile-Based Detector**\nDocker Lambda (10GB)\nColor histogram matching" as ticker
+  }
+
+  package "Audio & AI" as audio {
+    rectangle "**AWS Transcribe**\nLambda trigger\nWord-level timestamps" as transcribe
+  }
+
+  rectangle "**Readiness Gate**\nLambda\nWaits for transcript +\nvisual segments" as readiness #E8F5E9
+
+  package "AI Classification" as aiclass {
+    rectangle "**AI Segmentation**\nBedrock (Claude Sonnet)\nTopic & speaker detection" as aiseg
+    rectangle "**Sub-Segment / Teaser\nDetection**\nBedrock (Claude)\nTransition speech" as teaser
+  }
+
+  rectangle "**Results Merger**\nLambda\nUnified JSON with\ntitles + transcripts" as merger
+
+  rectangle "**Evaluation**\nLambda\nF1, IoU, boundary metrics\nvs ground truth" as eval
+}
+
+
+package "Data Layer" as data {
+  database "**S3 Results**\nsegment_results/\nai_results/\nsubsegment_results/\nresult/" as s3results
+  database "**DynamoDB**\nSegment records\nEval metrics" as dynamo
+  database "**RDS (PostgreSQL)**\nCatalog database\nApproved annotations" as rds
+}
+
+
+package "Segmentation Review Platform" as platform #E8F5E9 {
+  rectangle "**AWS Amplify**\nReact + TypeScript\nCognito Auth" as amplify
+  rectangle "**Video Select**\nBrowse & search\nprocessed videos" as videoselect
+  rectangle "**Results Viewer**\nInteractive timeline\nColor-coded segments" as viewer
+  rectangle "**Edit Mode**\nDrag boundaries\nMerge/split segments\nApprove & save" as editmode
+}
+
+
+s3upload -down-> dispatcher : S3 event trigger
+
+dispatcher -down-> blackframe : MSNBC\n(black frames)
+dispatcher -down-> ticker : CNN / FNC\n(profile match)
+dispatcher -right-> transcribe : all videos
+
+blackframe -down-> readiness : segment_results/
+ticker -down-> readiness : segment_results/
+transcribe -down-> readiness : transcriptions/
+
+readiness -down-> aiseg : both artifacts ready
+
+aiseg -down-> teaser : ai_results/
+teaser -down-> merger : subsegment_results/
+merger -right-> eval : result/
+
+
+merger -down-> s3results : result/{video}.json
+merger -down-> dynamo
+eval -down-> dynamo : eval metrics
+
+
+s3results -down-> amplify : Amplify Storage\n(read results)
+amplify - -> videoselect
+videoselect - -> viewer
+viewer - -> editmode
+
+editmode -down-> s3results : save corrections
+editmode -down-> rds : approved →\ncatalog ingest
+
+archivist -right-> amplify : login\n(Cognito)
+
+
+note bottom of readiness
+  **Readiness Gate**: AI pipeline
+  only fires when BOTH visual
+  detection AND transcription
+  have completed for a video.
+end note
+
+note right of ticker
+  Fallback: if profile detector
+  finds 0 segments (wrong era),
+  automatically triggers
+  black frame detection.
+end note
+
+note bottom of editmode
+  Archivists correct any errors
+  in the automated labels, then
+  approve segments for catalog
+  ingest. Human-in-the-loop
+  ensures archival quality.
+end note
+
+note right of s3upload
+  **Trigger**: Any .mp4 uploaded
+  to the video/ prefix starts
+  the pipeline automatically.
+  ~$1.50 per hour of video.
+end note
+
+@enduml
+
+PlantUML version 1.2021.00(Sun Jan 10 04:25:05 CST 2021)
+(MIT source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Default Encoding: UTF-8
+Language: en
+Country: US
+--></g></svg>

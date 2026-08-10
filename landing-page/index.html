@@ -10,13 +10,15 @@
 <body>
   <nav class="navbar">
     <div class="nav-container">
+       <a href="https://vcil.library.vanderbilt.edu" ><img src="./images/vcil-logo2-wht.png" width="120px" style="display: block; margin: 0 auto;"></img></a>
       <a href="#" class="nav-logo">Video Auto-Labeling</a>
       <ul class="nav-links">
         <li><a href="#overview">Overview</a></li>
         <li><a href="#algorithm">Visual Processing</a></li>
         <li><a href="#transcription">Transcription</a></li>
         <li><a href="#transcription">AI</a></li>
-        <li><a href="#frontend">Human-in-the-loop</a></li>
+        <li><a href="#backend">Architecture</a></li>
+        <li><a href="#frontend">Review Platform</a></li>
         <li><a href="#dataflow">Data Flow</a></li>
         <li><a href="#demo">Demo</a></li>
         <li><a href="#about">About</a></li>
@@ -27,7 +29,7 @@
   <header class="hero">
     <div class="hero-content">
       <h1>Video Auto-Labeling Pipeline</h1>
-      <p class="hero-subtitle">Automated video segmentation using visual boundary detection, AI transcript classification, and AWS serverless architecture. Configurable for any video type — broadcasts, lectures, sports, podcasts, and more.</p>
+      <p class="hero-subtitle">An automated backend pipeline for video segmentation — using visual boundary detection, AI transcript classification, and AWS serverless architecture — paired with an archivist-facing Segmentation Review Platform for human validation. Configurable for any video type: broadcasts, lectures, sports, podcasts, and more.</p>
       <div class="hero-badges">
         <span class="badge">AWS Lambda</span>
         <span class="badge">Step Functions</span>
@@ -41,28 +43,44 @@
   </header>
 
   <main>
+    <!-- Public-Facing Description -->
+    <section class="section" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 4rem 0;">
+      <div class="container" style="max-width: 900px; text-align: center;">
+        <h2 style="font-size: 2rem; margin-bottom: 1.5rem;">Unlocking Video Archives at Scale</h2>
+        <p style="font-size: 1.15rem; line-height: 1.8; color: #333;">
+          Thousands of hours of video sit in archives every year — unsearchable, unlabeled, and invisible to researchers who need them most. The Video Auto-Labeling Pipeline changes that. Built at the intersection of computer vision, large language models, and cloud-native architecture, this backend system watches video so humans don't have to — automatically identifying segment boundaries, classifying content types, and producing structured metadata ready for discovery platforms, citation tools, and scholarly research.
+        </p>
+        <p style="font-size: 1.15rem; line-height: 1.8; color: #333; margin-top: 1rem;">
+          What once took trained archivists days of manual review now happens in minutes, at a fraction of the cost. The pipeline processes an hour of video for under $2 — detecting visual transitions, transcribing speech, and using AI to segment and label every moment. Results flow directly into the Segmentation Review Platform, a web application where archivists review, correct, and validate the automated labels before they enter the catalog.
+        </p>
+        <p style="font-size: 1.05rem; line-height: 1.8; color: #555; margin-top: 1rem;">
+          Developed by the Vanderbilt Cloud Innovation Lab in partnership with the Vanderbilt Television News Archive and AWS, this open-source tool is designed to be domain-agnostic — equally effective on broadcast news, lectures, live events, sports, and any video collection waiting to be discovered.
+        </p>
+      </div>
+    </section>
+
     <!-- Overview Section -->
     <section id="overview" class="section">
       <div class="container">
         <h2>Project Overview</h2>
-        <p>This system automatically segments video content by detecting visual boundaries, transcribing audio, and classifying segments using AI. It supports configurable segment types and detection methods, making it adaptable to any video domain — from broadcasts to lectures to live events.</p>
+        <p>This project consists of two integrated components: a <strong>backend pipeline</strong> that automatically segments video content using visual boundary detection, audio transcription, and AI classification; and a <strong>Segmentation Review Platform</strong> — a web application where archivists review, edit, and approve the pipeline's output before it enters the catalog. Together, they support configurable segment types and detection methods, making the system adaptable to any video domain.</p>
         
         <div class="feature-grid">
 
           <div class="feature-card">
             <div class="feature-icon">🔍</div>
             <h3>Visual Boundary Detection</h3>
-            <p>Multiple detection methods: black frame analysis, color profile matching, or custom approaches — configurable per video source.</p>
+            <p>The pipeline uses multiple detection methods — black frame analysis, color profile matching, or custom approaches — configurable per video source.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">🧩</div>
             <h3>AI Classification</h3>
-            <p>Claude classifies segments by analyzing transcripts with configurable segment type vocabularies.</p>
+            <p>The pipeline sends transcripts to Claude, which classifies segments using configurable content-type vocabularies tailored to each collection.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">🎬</div>
-            <h3>Interactive Results</h3>
-            <p>React web application for viewing, editing, and validating segmentation results with timeline visualization and video playback.</p>
+            <h3>Segmentation Review Platform</h3>
+            <p>Archivists use the review platform to visualize results on an interactive timeline, correct boundaries, adjust labels, and approve segments — ensuring every annotation meets archival standards before publication.</p>
           </div>
         </div>
       </div>
@@ -218,7 +236,7 @@
     <section id="transcription" class="section">
       <div class="container">
         <h2>Transcription &amp; AI Segmentation </h2>
-        <p>This part of the automated pipeline uses the visual detection output as input to an AI-powered transcript segmentation system. This identifies individual content segments within the non-break portions of each video.</p>
+        <p>After visual boundaries are detected, the pipeline feeds that output into an AI-powered transcript segmentation system. This stage identifies individual content segments within the non-break portions of each video — determining where one story ends and another begins.</p>
 
         <div class="pipeline-overview">
           <h3>How It Works</h3>
@@ -317,8 +335,8 @@
            <!-- Frontend Section -->
     <section id="frontend" class="section section-alt">
       <div class="container">
-        <h2>Frontend Application</h2>
-        <p>The web application is built with React + TypeScript + Vite, deployed on AWS Amplify Gen 2.</p>
+        <h2>Segmentation Review Platform</h2>
+        <p>The Segmentation Review Platform is a web application built for archivists. Once the backend pipeline produces its automated labels, archivists use this tool to review results, correct errors, and approve final annotations before they enter the catalog. Built with React + TypeScript + Vite and deployed on AWS Amplify Gen 2.</p>
 
         <div class="frontend-stack">
           <h3>Technology Stack</h3>
@@ -348,15 +366,15 @@
         <div class="page-cards">
           <div class="page-card">
             <h4>📹 Video Select</h4>
-            <p>Browse and search all available videos from S3 storage. Preview video before selecting for analysis.</p>
+            <p>Archivists browse and search all available videos from S3 storage. Preview video metadata and processing status before selecting one for review.</p>
           </div>
           <div class="page-card">
             <h4>🎬 Results Viewer</h4>
-            <p>Interactive visualization of segmentation results with a color-coded timeline. Click segments to jump to that point in the video. Supports editing segment boundaries, adding/removing segments, and merging adjacent segments.</p>
+            <p>Displays the pipeline's automated segmentation on a color-coded interactive timeline. Archivists click segments to jump to that point in the video and verify accuracy against the actual content.</p>
           </div>
           <div class="page-card">
             <h4>✏️ Edit Mode</h4>
-            <p>Users can enter edit mode to correct segmentation errors: drag timeline markers, inline-edit timestamps, change segment type labels, merge segments, or add new ones. Edits save back to S3 as JSON.</p>
+            <p>Archivists enter edit mode to correct segmentation errors: drag timeline markers, inline-edit timestamps, change segment type labels, merge segments, or add new ones. Approved edits save back to S3 and flow into the catalog database.</p>
           </div>
         </div>
 
@@ -384,65 +402,190 @@
       </div>
     </section>
 
-        <h3>Cost &amp; Performance</h3>
+        <h3>Pipeline Cost &amp; Performance</h3>
         <div class="code-block">
-          <pre><code>Per 1-hour video:
-├── Video processing (detection of visual clues to content): free-tier Lambda or ~$0.035/10 videos           
+          <pre><code>Per 1-hour video (backend pipeline only):
+├── Visual detection (Lambda workers): free-tier or ~$0.035/10 videos           
 ├── Transcription (AWS Transcribe): ~$0.72, 3-5 min
 ├── AI Segmentation (Bedrock Claude): ~$0.60-$0.80, 2-4 min
 └── Evaluation: ~$0.01, 30 sec
-Total: ~$1.50, 6-10 minutes end-to-end</code></pre>
+Total: ~$1.50, 6-10 minutes end-to-end (before archivist review)</code></pre>
         </div>
 
           <!-- Backend Section -->
     <section id="backend" class="section section-alt">
       <div class="container">
-        <h2>Backend Architecture</h2>
-        <p>The processing pipeline runs entirely on AWS serverless infrastructure, deployed with SAM (Serverless Application Model).</p>
+        <h2>Pipeline Architecture (Backend)</h2>
+        <p>The backend pipeline runs entirely on AWS serverless infrastructure, deployed with SAM (Serverless Application Model). It processes videos automatically — no human interaction required until results reach the Segmentation Review Platform.</p>
 
+        <!-- Visual Architecture Diagram -->
+        <div class="arch-visual" style="margin: 3rem 0; overflow-x: auto;">
+          <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 2rem; align-items: start; min-width: 900px; padding: 2rem; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+            
+            <!-- LEFT: Pipeline -->
+            <div style="display: flex; flex-direction: column; gap: 0;">
+              <h3 style="text-align: center; color: #1a365d; margin-bottom: 1rem; font-size: 1rem;">Backend Pipeline</h3>
+              
+              <!-- Upload Trigger -->
+              <div style="background: #fff3e0; border: 2px solid #ff9800; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+                <strong>S3 Video Upload</strong><br>
+                <span style="font-size: 0.8rem; color: #666;">video/*.mp4 → S3 event trigger</span>
+              </div>
+              <div style="text-align: center; color: #4a90d9; font-size: 1.2rem;">↓</div>
+              
+              <!-- Dispatcher -->
+              <div style="background: #e3f2fd; border: 2px solid #1976d2; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+                <strong>Video Dispatcher</strong><br>
+                <span style="font-size: 0.8rem; color: #666;">Lambda — routes to detection method per source</span>
+              </div>
+              <div style="text-align: center; color: #4a90d9; font-size: 1.2rem;">↓ ↓</div>
+
+              <!-- Parallel Tracks -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                <div style="background: #e8f5e9; border: 2px solid #388e3c; border-radius: 8px; padding: 0.75rem; text-align: center;">
+                  <strong style="font-size: 0.85rem;">Visual Detection</strong><br>
+                  <span style="font-size: 0.75rem; color: #666;">Step Functions<br>Worker Lambdas (OpenCV)<br>Black frame / Profile match</span>
+                </div>
+                <div style="background: #e8f5e9; border: 2px solid #388e3c; border-radius: 8px; padding: 0.75rem; text-align: center;">
+                  <strong style="font-size: 0.85rem;">AWS Transcribe</strong><br>
+                  <span style="font-size: 0.75rem; color: #666;">Lambda trigger<br>Word-level timestamps<br>Full transcript JSON</span>
+                </div>
+              </div>
+              <div style="text-align: center; color: #4a90d9; font-size: 1.2rem;">↘ ↙</div>
+
+              <!-- Readiness Gate -->
+              <div style="background: #fce4ec; border: 2px solid #c62828; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+                <strong>Readiness Gate</strong><br>
+                <span style="font-size: 0.8rem; color: #666;">Waits for BOTH visual segments + transcript</span>
+              </div>
+              <div style="text-align: center; color: #4a90d9; font-size: 1.2rem;">↓</div>
+
+              <!-- AI Classification -->
+              <div style="background: #ede7f6; border: 2px solid #5e35b1; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+                <strong>AI Segmentation</strong><br>
+                <span style="font-size: 0.8rem; color: #666;">Bedrock (Claude Sonnet) — topic & speaker boundary detection</span>
+              </div>
+              <div style="text-align: center; color: #4a90d9; font-size: 1.2rem;">↓</div>
+
+              <div style="background: #ede7f6; border: 2px solid #5e35b1; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+                <strong>Sub-Segment / Teaser Detection</strong><br>
+                <span style="font-size: 0.8rem; color: #666;">Bedrock (Claude) — transition speech at content→break boundaries</span>
+              </div>
+              <div style="text-align: center; color: #4a90d9; font-size: 1.2rem;">↓</div>
+
+              <!-- Merger -->
+              <div style="background: #e3f2fd; border: 2px solid #1976d2; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+                <strong>Results Merger</strong><br>
+                <span style="font-size: 0.8rem; color: #666;">Lambda — unified JSON with titles + transcripts</span>
+              </div>
+            </div>
+
+            <!-- CENTER: Data Layer -->
+            <div style="display: flex; flex-direction: column; gap: 1rem; justify-content: center; padding-top: 4rem;">
+              <h3 style="text-align: center; color: #1a365d; margin-bottom: 0.5rem; font-size: 1rem;">Data Layer</h3>
+              
+              <div style="background: #fff8e1; border: 2px solid #f9a825; border-radius: 8px; padding: 0.75rem; text-align: center;">
+                <strong style="font-size: 0.85rem;">S3 Buckets</strong><br>
+                <span style="font-size: 0.75rem; color: #666;">video/<br>segment_results/<br>ai_results/<br>result/</span>
+              </div>
+              
+              <div style="background: #fff8e1; border: 2px solid #f9a825; border-radius: 8px; padding: 0.75rem; text-align: center;">
+                <strong style="font-size: 0.85rem;">DynamoDB</strong><br>
+                <span style="font-size: 0.75rem; color: #666;">Segment records<br>Eval metrics</span>
+              </div>
+
+              <div style="background: #fff8e1; border: 2px solid #f9a825; border-radius: 8px; padding: 0.75rem; text-align: center;">
+                <strong style="font-size: 0.85rem;">RDS (PostgreSQL)</strong><br>
+                <span style="font-size: 0.75rem; color: #666;">Catalog database<br>Approved annotations</span>
+              </div>
+
+              <div style="text-align: center; font-size: 0.75rem; color: #888; margin-top: 0.5rem;">
+                ← Pipeline writes<br>Platform reads →
+              </div>
+            </div>
+
+            <!-- RIGHT: Review Platform -->
+            <div style="display: flex; flex-direction: column; gap: 0; padding-top: 4rem;">
+              <h3 style="text-align: center; color: #1a365d; margin-bottom: 1rem; font-size: 1rem;">Segmentation Review Platform</h3>
+              
+              <div style="background: #e0f2f1; border: 2px solid #00796b; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+                <strong>AWS Amplify</strong><br>
+                <span style="font-size: 0.8rem; color: #666;">React + TypeScript + Cognito Auth</span>
+              </div>
+              <div style="text-align: center; color: #00796b; font-size: 1.2rem;">↓</div>
+
+              <div style="background: #e0f2f1; border: 2px solid #00796b; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+                <strong>Video Select</strong><br>
+                <span style="font-size: 0.8rem; color: #666;">Browse processed videos, view status</span>
+              </div>
+              <div style="text-align: center; color: #00796b; font-size: 1.2rem;">↓</div>
+
+              <div style="background: #e0f2f1; border: 2px solid #00796b; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+                <strong>Results Viewer</strong><br>
+                <span style="font-size: 0.8rem; color: #666;">Interactive timeline, click-to-seek playback</span>
+              </div>
+              <div style="text-align: center; color: #00796b; font-size: 1.2rem;">↓</div>
+
+              <div style="background: #e0f2f1; border: 2px solid #00796b; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+                <strong>Edit & Approve</strong><br>
+                <span style="font-size: 0.8rem; color: #666;">Drag boundaries, merge/split, approve for catalog</span>
+              </div>
+              <div style="text-align: center; color: #00796b; font-size: 1.2rem;">↓</div>
+
+              <div style="background: #e8f5e9; border: 2px dashed #388e3c; border-radius: 8px; padding: 0.75rem 1rem; text-align: center;">
+                <strong>Catalog Ingest</strong><br>
+                <span style="font-size: 0.8rem; color: #666;">Approved annotations → RDS → discoverable by researchers</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Detailed Steps (collapsed for reference) -->
+        <h3>Pipeline Stages in Detail</h3>
         <div class="architecture-diagram">
           <div class="arch-step">
             <div class="arch-number">1</div>
             <div class="arch-content">
-              <h4>Batch Orchestrator</h4>
-              <p class="arch-tech">Shell Script + AWS CLI</p>
-              <p>Lists all .mp4 videos in S3, groups them into batches of 20 (to stay under Step Functions' 25K event limit), and invokes the Launcher Lambda for each batch.</p>
+              <h4>Video Dispatcher</h4>
+              <p class="arch-tech">Lambda (S3 trigger)</p>
+              <p>Extracts the source network from the filename, selects the appropriate detection method (black frame or profile-based), and launches parallel processing.</p>
             </div>
           </div>
           <div class="arch-arrow">↓</div>
           <div class="arch-step">
             <div class="arch-number">2</div>
             <div class="arch-content">
-              <h4>Launcher Lambda</h4>
-              <p class="arch-tech">Python + Boto3</p>
-              <p>Scans the S3 bucket for video files, builds chunk definitions (each video divided into 60-second chunks starting at the 5-minute mark), and starts a Step Functions execution.</p>
+              <h4>Visual Detection (Parallel)</h4>
+              <p class="arch-tech">Step Functions + Worker Lambdas (OpenCV, Docker ARM64)</p>
+              <p>Each video is divided into 60-second chunks. Up to 800 concurrent workers scan for visual boundaries (black frames or color profile deviations). Merger Lambda collects results, pairs events into segments, and probes for missing partners.</p>
             </div>
           </div>
           <div class="arch-arrow">↓</div>
           <div class="arch-step">
             <div class="arch-number">3</div>
             <div class="arch-content">
-              <h4>Step Functions State Machine</h4>
-              <p class="arch-tech">AWS Step Functions (Nested Map)</p>
-              <p>Orchestrates parallel processing: outer Map iterates videos (20 concurrent), inner Map iterates chunks per video (40 concurrent workers). Includes retry logic with exponential backoff.</p>
+              <h4>Transcription (Parallel)</h4>
+              <p class="arch-tech">AWS Transcribe (Lambda trigger)</p>
+              <p>Runs in parallel with visual detection. Produces word-level timestamps for the entire video.</p>
             </div>
           </div>
           <div class="arch-arrow">↓</div>
           <div class="arch-step">
             <div class="arch-number">4</div>
             <div class="arch-content">
-              <h4>Worker Lambda</h4>
-              <p class="arch-tech">Python + OpenCV (Docker, ARM64)</p>
-              <p>Reads a 60-second chunk of video via presigned URL. Performs coarse 1fps black frame scan, then refines detections to frame-accurate boundaries. Returns timestamped black frame runs.</p>
+              <h4>Readiness Gate → AI Classification</h4>
+              <p class="arch-tech">Amazon Bedrock (Claude Sonnet)</p>
+              <p>Once both visual segments and transcript are available, Claude identifies topic boundaries and classifies each content segment. A second pass detects transition speech (teasers) at segment edges.</p>
             </div>
           </div>
           <div class="arch-arrow">↓</div>
           <div class="arch-step">
             <div class="arch-number">5</div>
             <div class="arch-content">
-              <h4>Merger Lambda</h4>
-              <p class="arch-tech">Python + Boto3</p>
-              <p>Collects all chunk results, merges adjacent runs, extracts discrete events, pairs them into segments, probes for missing partners, and writes final results to S3 and DynamoDB.</p>
+              <h4>Results Merger → Review Platform</h4>
+              <p class="arch-tech">Lambda + S3 + DynamoDB</p>
+              <p>Merges all outputs into a unified JSON (titles, transcripts, timestamps, segment types). Writes to S3 and DynamoDB. Results appear automatically in the Segmentation Review Platform for archivist review.</p>
             </div>
           </div>
         </div>
@@ -450,27 +593,35 @@ Total: ~$1.50, 6-10 minutes end-to-end</code></pre>
         <h3>Infrastructure Resources</h3>
         <div class="resource-grid">
           <div class="resource-card">
-            <h4>S3 Bucket</h4>
-            <p>Stores source videos (<code>video/</code>) and processing results (<code>result/</code>).</p>
+            <h4>S3 Buckets</h4>
+            <p>Source videos (<code>video/</code>), intermediate outputs (<code>segment_results/</code>, <code>ai_results/</code>), and final merged results (<code>result/</code>).</p>
           </div>
           <div class="resource-card">
-            <h4>DynamoDB Tables</h4>
-            <p>Three tables: chunk results, per-video segment results (video_name + timestamp), and evaluation summaries.</p>
+            <h4>DynamoDB</h4>
+            <p>Three tables: chunk results, per-video segment records (video_name + timestamp), and evaluation metric summaries.</p>
           </div>
           <div class="resource-card">
             <h4>Lambda Functions</h4>
-            <p>Containerized (Docker) on ARM64. Worker: 2GB RAM, 5 min timeout. Merger: 512MB, 15 min timeout. Launcher: 256MB, 1 min.</p>
+            <p>Containerized (Docker) on ARM64 (Graviton). Worker: 2GB RAM, 5 min timeout. Merger: 512MB, 15 min. AI Segmentation: 10GB, 5 min.</p>
           </div>
           <div class="resource-card">
             <h4>Step Functions</h4>
-            <p>Standard workflow with nested Map states. Processes up to 800 chunks concurrently (20 videos × 40 chunks).</p>
+            <p>Standard workflow with nested Map states. Processes up to 800 chunks concurrently (20 videos &times; 40 chunks each).</p>
+          </div>
+          <div class="resource-card">
+            <h4>Amazon Bedrock</h4>
+            <p>Claude Sonnet for transcript classification, topic boundary detection, and teaser identification. Invoked via Lambda.</p>
+          </div>
+          <div class="resource-card">
+            <h4>AWS Amplify</h4>
+            <p>Hosts the Segmentation Review Platform (React). Provides Cognito authentication and AppSync GraphQL API for the archivist UI.</p>
           </div>
         </div>
       </div>
     </section>
 
         <h3>Serverless Deployment</h3>
-        <p>The pipeline deploys as event-driven Lambda functions connected by S3 triggers:</p>
+        <p>The backend pipeline deploys as event-driven Lambda functions connected by S3 triggers. Each stage runs automatically when its input becomes available — no orchestration code needed beyond S3 notifications:</p>
         <div class="code-block">
           <pre><code>Upload video to S3
   → [S3 trigger] → Transcription Lambda (AWS Transcribe)
@@ -480,7 +631,7 @@ Total: ~$1.50, 6-10 minutes end-to-end</code></pre>
         → [S3 trigger] → Sub-Segment Detector
           → subsegment_results/{video}_with_subsegments.json
             → [S3 trigger] → Results Merger
-              → result/{video}.json → Web UI</code></pre>
+              → result/{video}.json → Segmentation Review Platform</code></pre>
         </div>
       </div>
     </section>
@@ -494,50 +645,50 @@ Total: ~$1.50, 6-10 minutes end-to-end</code></pre>
             <div class="flow-icon">📤</div>
             <div class="flow-text">
               <h4>1. Video Upload</h4>
-              <p>Video files (.mp4) are uploaded to S3</p>
+              <p>Video files (.mp4) are uploaded to S3, triggering the backend pipeline automatically.</p>
             </div>
           </div>
           <div class="flow-step">
             <div class="flow-icon">⚡</div>
             <div class="flow-text">
-              <h4>2. Parallel Processing of Visual Data</h4>
-              <p>Step Functions fans out: up to 800 concurrent Worker invocations scanning for black frames in 60s chunks or searches for distinctive visual features in selected region of videos.</p>
-              <p>Merger Lambda collects results, pairs black frame events into segments, probes for missing boundaries</p>
+              <h4>2. Visual Boundary Detection (Pipeline)</h4>
+              <p>Step Functions fans out: up to 800 concurrent Worker invocations scanning for black frames in 60s chunks, or searching for distinctive visual features in selected regions of the video.</p>
+              <p>Merger Lambda collects results, pairs black frame events into segments, and probes for missing boundaries.</p>
             </div>
           </div>
           <div class="flow-step">
             <div class="flow-icon">💾</div>
             <div class="flow-text">
-              <h4>3. Store Segment Results</h4>
-              <p>Detected visually distinct segments written to S3 (<code>segment_results/{video}_segments.json</code>) and DynamoDB.</p>
+              <h4>3. Store Segment Results (Pipeline)</h4>
+              <p>Detected visual segments written to S3 (<code>segment_results/{video}_segments.json</code>) and DynamoDB.</p>
             </div>
           </div>
           <div class="flow-step">
             <div class="flow-icon">📝</div>
             <div class="flow-text">
-              <h4>4. Transcription &amp; AI Segmentation</h4>
-              <p>Videos are transcribed (AWS Transcribe), visually distinct segments can be filtered out, and Claude identifies individual content segment boundaries. Output: <code>ai_results/{video}_segments.json</code></p>
+              <h4>4. Transcription &amp; AI Segmentation (Pipeline)</h4>
+              <p>Videos are transcribed (AWS Transcribe), break segments are filtered out, and Claude identifies individual content segment boundaries within the remaining speech. Output: <code>ai_results/{video}_segments.json</code></p>
             </div>
           </div>
           <div class="flow-step">
             <div class="flow-icon">🎯</div>
             <div class="flow-text">
-              <h4>5. Sub-Segment Detection</h4>
-              <p>Sub-Segment Detector loads visual and AI segments, merges into a unified timeline, and detects transition speech at content→break boundaries. Output: <code>subsegment_results/{video}_with_subsegments.json</code></p>
+              <h4>5. Sub-Segment Detection (Pipeline)</h4>
+              <p>Sub-Segment Detector loads visual and AI segments, merges them into a unified timeline, and detects transition speech at content→break boundaries. Output: <code>subsegment_results/{video}_with_subsegments.json</code></p>
             </div>
           </div>
           <div class="flow-step">
             <div class="flow-icon">🌐</div>
             <div class="flow-text">
-              <h4>6. Visualization</h4>
-              <p>Staff access the web app, select a video, view detected segments on an interactive timeline, and correct any errors</p>
+              <h4>6. Archivist Review (Segmentation Review Platform)</h4>
+              <p>Archivists open the Segmentation Review Platform, select a video, view the pipeline's detected segments on an interactive timeline, and verify or correct any errors.</p>
             </div>
           </div>
           <div class="flow-step">
             <div class="flow-icon">✅</div>
             <div class="flow-text">
-              <h4>7. Validation</h4>
-              <p>Human-corrected annotations saved back to S3 to be sent to database to augment discoverability.</p>
+              <h4>7. Approval &amp; Catalog Ingest</h4>
+              <p>Archivist-approved annotations are saved back to S3 and written to the catalog database, making the video segments discoverable by researchers.</p>
             </div>
           </div>
         </div>
@@ -546,7 +697,7 @@ Total: ~$1.50, 6-10 minutes end-to-end</code></pre>
     <section id="demo" class="section section-alt">
       <div class="container">
         <h2>Demo</h2>
-        <p>Watch the pipeline in action — this video demonstrates the full segmentation workflow from upload through final labeled results of our tool as used by the Vanderbilt Television News Archive.</p>
+        <p>Watch the system in action — this video demonstrates the full workflow from video upload through automated pipeline processing to archivist review and approval in the Segmentation Review Platform, as used by the Vanderbilt Television News Archive.</p>
         <div style="max-width: 800px; margin: 2rem auto;">
           <video controls style="width: 100%; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" preload="metadata">
             <source src="./VCIL_demo_video.mp4" type="video/mp4">
@@ -565,31 +716,33 @@ Total: ~$1.50, 6-10 minutes end-to-end</code></pre>
           <p>Students are involved in every stage of a Vanderbilt Cloud Innovation Lab project and learn a variety of career competencies in the process: experiential problem solving, critical thinking, project management, agile development, technical skills, and time management.</p>
         </div>
         <h3>Meet the Team</h3>
-        <div class="feature-grid">
-          <div class="feature-card">
-            <div class="feature-icon"><img src="images/oybek.jpeg" alt="Oybek" style="width:60px;height:60px;border-radius:50%;object-fit:cover;"></div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-top: 2rem;">
+          <div class="feature-card" style="text-align: center; padding: 2rem 1.5rem;">
+            <div style="margin-bottom: 1rem;"><img src="images/oybek.jpeg" alt="Oybek" style="width:120px;height:120px;border-radius:50%;object-fit:cover;box-shadow: 0 4px 8px rgba(0,0,0,0.15);"></div>
             <h3>Oybek</h3>
-            <p>Sophomore at Vanderbilt majoring in Computer Science, from Tashkent, Uzbekistan. Background in front-end development with React Native and cybersecurity.</p>
+            <p>Sophomore at Vanderbilt majoring in Computer Science, from Tashkent, Uzbekistan. Interests include history, strategy, and simulations. Background in front-end development with React Native and a cybersecurity internship at a regional bank.</p>
           </div>
-          <div class="feature-card">
-            <div class="feature-icon"><img src="images/brian.jpg" alt="Brian" style="width:60px;height:60px;border-radius:50%;object-fit:cover;"></div>
+          <div class="feature-card" style="text-align: center; padding: 2rem 1.5rem;">
+            <div style="margin-bottom: 1rem;"><img src="images/brian.jpg" alt="Brian" style="width:120px;height:120px;border-radius:50%;object-fit:cover;box-shadow: 0 4px 8px rgba(0,0,0,0.15);"></div>
             <h3>Brian</h3>
-            <p>Passionate about creative solutions to technical problems. Experience with Vanderbilt Library Special Collections and University Archives. Active with the Vanderbilt Robotics team.</p>
+            <p>Passionate about creative solutions to technical problems. Developed an appreciation for media preservation while working with Vanderbilt Library Special Collections and University Archives. Active with the Vanderbilt Robotics team.</p>
           </div>
-          <div class="feature-card">
-            <div class="feature-icon"><img src="images/wasi.jpg" alt="Wasi" style="width:60px;height:60px;border-radius:50%;object-fit:cover;"></div>
+          <div class="feature-card" style="text-align: center; padding: 2rem 1.5rem;">
+            <div style="margin-bottom: 1rem;"><img src="images/wasi.jpg" alt="Wasi Hussain" style="width:120px;height:120px;border-radius:50%;object-fit:cover;box-shadow: 0 4px 8px rgba(0,0,0,0.15);"></div>
             <h3>Wasi Hussain</h3>
-            <p>Computer Science major focused on the intersection of cloud computing and machine learning. Recent work on improving energy efficiency of large language models.</p>
+            <p>Computer Science major focused on the intersection of cloud computing and machine learning. Recent work on improving energy efficiency of large language models and building scalable systems using SageMaker, EC2, and CloudWatch.</p>
           </div>
-          <div class="feature-card">
-            <div class="feature-icon"><img src="images/rithika.jpg" alt="Rithika" style="width:60px;height:60px;border-radius:50%;object-fit:cover;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem; margin-top: 2rem; max-width: 66%; margin-left: auto; margin-right: auto;">
+          <div class="feature-card" style="text-align: center; padding: 2rem 1.5rem;">
+            <div style="margin-bottom: 1rem;"><img src="images/rithika.jpg" alt="Rithika Thambireddy" style="width:120px;height:120px;border-radius:50%;object-fit:cover;box-shadow: 0 4px 8px rgba(0,0,0,0.15);"></div>
             <h3>Rithika Thambireddy</h3>
-            <p>Computer Science and Mathematics student. Experience spanning AI/ML, data engineering, and full-stack development. Driven to build inclusive and accessible tools.</p>
+            <p>Computer Science and Mathematics student passionate about harnessing technology to advance accessibility. Experience spanning AI/ML, data engineering, and full-stack development. Driven to build tools that are robust, scalable, and inclusive.</p>
           </div>
-          <div class="feature-card">
-            <div class="feature-icon"><img src="images/abbie.jpg" alt="Abbie" style="width:60px;height:60px;border-radius:50%;object-fit:cover;"></div>
+          <div class="feature-card" style="text-align: center; padding: 2rem 1.5rem;">
+            <div style="margin-bottom: 1rem;"><img src="images/abbie.jpg" alt="Abbie Chen" style="width:120px;height:120px;border-radius:50%;object-fit:cover;box-shadow: 0 4px 8px rgba(0,0,0,0.15);"></div>
             <h3>Abbie Chen</h3>
-        <p>Senior studying Computer Science at Vanderbilt University.</p>
+            <p>Senior studying Computer Science at Vanderbilt University.</p>
           </div>
         </div>
       </div>

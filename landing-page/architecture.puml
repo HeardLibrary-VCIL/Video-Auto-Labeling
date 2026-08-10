@@ -1,0 +1,177 @@
+@startuml Video Auto-Labeling Architecture
+
+!define AWSPuml https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v18.0/dist
+' Fallback: if the AWS icons can't be fetched, this still renders as a clean diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam defaultFontColor #232F3E
+
+skinparam rectangle {
+  BackgroundColor #F5F8FC
+  BorderColor #232F3E
+  RoundCorner 10
+  FontColor #232F3E
+}
+
+skinparam database {
+  BackgroundColor #F5F8FC
+  BorderColor #232F3E
+  FontColor #232F3E
+}
+
+skinparam arrow {
+  Color #4A90D9
+  FontColor #555555
+  FontSize 10
+}
+
+skinparam note {
+  BackgroundColor #FFF8E1
+  BorderColor #FFA000
+  FontColor #333333
+}
+
+skinparam package {
+  BackgroundColor #EEF4FB
+  BorderColor #4A90D9
+  FontColor #232F3E
+}
+
+title <font size=18 color=#232F3E><b>Video Auto-Labeling System</b></font>\n<font size=12 color=#555555>Backend Pipeline + Segmentation Review Platform</font>
+
+' ═══════════════════════════════════════════════════════════════
+' ACTORS
+' ═══════════════════════════════════════════════════════════════
+
+actor "Archivist" as archivist #232F3E
+
+' ═══════════════════════════════════════════════════════════════
+' BACKEND PIPELINE
+' ═══════════════════════════════════════════════════════════════
+
+package "Backend Pipeline (AWS Serverless)" as pipeline {
+
+  rectangle "**S3 Video Bucket**\nvideo/*.mp4" as s3upload #FFE0B2
+
+  rectangle "**Video Dispatcher**\nLambda\nRoutes to detection method" as dispatcher
+
+  package "Visual Detection" as visual {
+    rectangle "**Black Frame Detector**\nStep Functions +\nWorker Lambdas (OpenCV)\n800 concurrent chunks" as blackframe
+    rectangle "**Profile-Based Detector**\nDocker Lambda (10GB)\nColor histogram matching" as ticker
+  }
+
+  package "Audio & AI" as audio {
+    rectangle "**AWS Transcribe**\nLambda trigger\nWord-level timestamps" as transcribe
+  }
+
+  rectangle "**Readiness Gate**\nLambda\nWaits for transcript +\nvisual segments" as readiness #E8F5E9
+
+  package "AI Classification" as aiclass {
+    rectangle "**AI Segmentation**\nBedrock (Claude Sonnet)\nTopic & speaker detection" as aiseg
+    rectangle "**Sub-Segment / Teaser\nDetection**\nBedrock (Claude)\nTransition speech" as teaser
+  }
+
+  rectangle "**Results Merger**\nLambda\nUnified JSON with\ntitles + transcripts" as merger
+
+  rectangle "**Evaluation**\nLambda\nF1, IoU, boundary metrics\nvs ground truth" as eval
+}
+
+' ═══════════════════════════════════════════════════════════════
+' DATA STORES
+' ═══════════════════════════════════════════════════════════════
+
+package "Data Layer" as data {
+  database "**S3 Results**\nsegment_results/\nai_results/\nsubsegment_results/\nresult/" as s3results
+  database "**DynamoDB**\nSegment records\nEval metrics" as dynamo
+  database "**RDS (PostgreSQL)**\nCatalog database\nApproved annotations" as rds
+}
+
+' ═══════════════════════════════════════════════════════════════
+' SEGMENTATION REVIEW PLATFORM (FRONTEND)
+' ═══════════════════════════════════════════════════════════════
+
+package "Segmentation Review Platform" as platform #E8F5E9 {
+  rectangle "**AWS Amplify**\nReact + TypeScript\nCognito Auth" as amplify
+  rectangle "**Video Select**\nBrowse & search\nprocessed videos" as videoselect
+  rectangle "**Results Viewer**\nInteractive timeline\nColor-coded segments" as viewer
+  rectangle "**Edit Mode**\nDrag boundaries\nMerge/split segments\nApprove & save" as editmode
+}
+
+' ═══════════════════════════════════════════════════════════════
+' CONNECTIONS — Pipeline Flow
+' ═══════════════════════════════════════════════════════════════
+
+s3upload -down-> dispatcher : S3 event trigger
+
+dispatcher -down-> blackframe : MSNBC\n(black frames)
+dispatcher -down-> ticker : CNN / FNC\n(profile match)
+dispatcher -right-> transcribe : all videos
+
+blackframe -down-> readiness : segment_results/
+ticker -down-> readiness : segment_results/
+transcribe -down-> readiness : transcriptions/
+
+readiness -down-> aiseg : both artifacts ready
+
+aiseg -down-> teaser : ai_results/
+teaser -down-> merger : subsegment_results/
+merger -right-> eval : result/
+
+' ═══════════════════════════════════════════════════════════════
+' CONNECTIONS — Storage
+' ═══════════════════════════════════════════════════════════════
+
+merger -down-> s3results : result/{video}.json
+merger -down-> dynamo
+eval -down-> dynamo : eval metrics
+
+' ═══════════════════════════════════════════════════════════════
+' CONNECTIONS — Frontend
+' ═══════════════════════════════════════════════════════════════
+
+s3results -down-> amplify : Amplify Storage\n(read results)
+amplify --> videoselect
+videoselect --> viewer
+viewer --> editmode
+
+editmode -down-> s3results : save corrections
+editmode -down-> rds : approved →\ncatalog ingest
+
+archivist -right-> amplify : login\n(Cognito)
+
+' ═══════════════════════════════════════════════════════════════
+' NOTES
+' ═══════════════════════════════════════════════════════════════
+
+note bottom of readiness
+  **Readiness Gate**: AI pipeline
+  only fires when BOTH visual
+  detection AND transcription
+  have completed for a video.
+end note
+
+note right of ticker
+  Fallback: if profile detector
+  finds 0 segments (wrong era),
+  automatically triggers
+  black frame detection.
+end note
+
+note bottom of editmode
+  Archivists correct any errors
+  in the automated labels, then
+  approve segments for catalog
+  ingest. Human-in-the-loop
+  ensures archival quality.
+end note
+
+note right of s3upload
+  **Trigger**: Any .mp4 uploaded
+  to the video/ prefix starts
+  the pipeline automatically.
+  ~$1.50 per hour of video.
+end note
+
+@enduml
