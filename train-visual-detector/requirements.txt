@@ -1,0 +1,12 @@
+# Training dependencies for train_model.py
+#
+# These are pinned to match backend/visual-detector/Dockerfile.model, the image
+# that loads the resulting .pkl at inference time. Keep the two in sync:
+#
+#   scikit-learn — the scaler and classifier are pickled. Unpickling across
+#                  versions can fail outright or silently change predictions.
+#   opencv-python — training and inference must resize and convert frames
+#                  identically, or the selected pixels no longer line up.
+opencv-python==4.14.0.94
+numpy==2.5.3
+scikit-learn==1.9.1

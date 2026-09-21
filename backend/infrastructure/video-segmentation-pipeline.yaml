@@ -115,8 +115,15 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
     Description: >
-      Whether to deploy the profile-based transition detector.
-      Set to false if only using black-frame detection.
+      Whether to deploy the model-based visual detector.
+      Set to false to use black-frame detection only.
+
+  ModelConfigKey:
+    Type: String
+    Default: config/ticker_network_config.json
+    Description: >
+      S3 key (within the VideoBucket) of the JSON mapping each source ID to its
+      model settings: model_threshold, scan_fps, and profile_key (the .pkl model).
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONDITIONS
@@ -507,7 +514,7 @@ Resources:
                                   'video_name': video_name
                               }),
                           )
-                          print(f"  → Transition Detection triggered for {video_name}")
+                          print(f"  → Model-based visual detection triggered for {video_name}")
                       else:
                           lambda_client.invoke(
                               FunctionName=VISUAL_DETECTOR_FUNCTION,
@@ -665,6 +672,8 @@ Resources:
           WORKER_FUNCTION_NAME: !Ref VisualSegmentDetectorWorker
           RESULTS_TABLE: !Ref SegmentDetectorResultsTable
           SEGMENT_RESULTS_TABLE: !Ref SegmentResultsTable
+          # Must match the prefix the readiness checker and results merger read
+          OUTPUT_PREFIX: segment_results/
     Metadata:
       DockerTag: merger
       DockerContext: ../visual-detector
@@ -705,7 +714,15 @@ Resources:
             FunctionName: !Ref VisualSegmentDetectorMerger
 
   # ─────────────────────────────────────────────────────────────────────────
-  # TRANSITION DETECTOR (Alternative visual detection method)
+  # MODEL-BASED DETECTOR (Primary visual detection method)
+  #
+  # Classifies each sampled frame with a per-source trained pixel classifier
+  # loaded from S3 (config/profiles/{SOURCE}_model.pkl). Downloads the whole
+  # video to /tmp and scans it in a single invocation — hence the large memory
+  # and 10 GB ephemeral storage. Writes segment_results/{video}_segments.json.
+  #
+  # If it finds no segments, it falls back to the black-frame detector by
+  # invoking VisualSegmentDetectorLauncher.
   # ─────────────────────────────────────────────────────────────────────────
   TransitionDetectorFunction:
     Type: AWS::Serverless::Function
@@ -714,23 +731,24 @@ Resources:
       FunctionName: !Sub '${ProjectName}-transition-detector-${Environment}'
       PackageType: Image
       ImageConfig:
-        Command: ["lambda_handler.handler"]
+        Command: ["handler.handler"]
       MemorySize: !Ref TransitionDetectorMemory
       Timeout: 900
       EphemeralStorage:
         Size: 10240
       Role: !GetAtt PipelineRole.Arn
       Tags:
-        Component: transition-detection
+        Component: visual-detection
       Environment:
         Variables:
           VIDEO_BUCKET: !If [CreateVideoBucket, !Ref VideoStorageBucket, !Ref VideoBucket]
           PROFILES_PREFIX: config/profiles/
-          DETECTION_CONFIG_KEY: config/detection_config.json
+          NETWORK_CONFIG_KEY: !Ref ModelConfigKey
+          BLACKFRAME_LAUNCHER: !Ref VisualSegmentDetectorLauncher
     Metadata:
-      DockerTag: transition
-      DockerContext: ../transition-detector
-      Dockerfile: Dockerfile
+      DockerTag: model-detector
+      DockerContext: ../visual-detector
+      Dockerfile: Dockerfile.model
 
   # ═══════════════════════════════════════════════════════════════════════════
   # TRANSCRIPTION AI PIPELINE (Claude-based Segmentation)

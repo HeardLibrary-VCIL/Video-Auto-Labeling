@@ -1,47 +1,37 @@
-"""Ticker-based commercial segment detection.
+"""Model-based commercial segment detection.
 
-Detects commercials by comparing each frame's ticker-region histogram
-against a precomputed network color profile. Frames dissimilar to the
-profile (no ticker visible) are classified as commercial.
+Detects commercials by classifying each sampled frame with a trained
+pixel classifier. The model resizes the frame, reads the pixel
+positions it was trained on, scales those values, and predicts a
+commercial probability. Frames whose probability exceeds the threshold are treated
+as commercial and grouped into segments.
 """
 
 import cv2
 import numpy as np
 
-# Histogram parameters — must match ColorProfile.py exactly
-H_BINS = 36
-S_BINS = 32
-V_BINS = 32
-HIST_SIZE = [H_BINS, S_BINS, V_BINS]
-HIST_RANGES = [0, 180, 0, 256, 0, 256]
-CHANNELS = [0, 1, 2]
-MARGIN_START_SEC = 300
-MARGIN_END_SEC = 60
+# Post-processing parameters
+MARGIN_START_SEC = 300     # ignore detections before this many seconds
+MARGIN_END_SEC = 60        # ignore detections after (duration - this)
+MIN_SEGMENT_SEC = 20       # drop segments shorter than this after merge
+MERGE_GAP_SEC = 10         # merge segments whose gap is smaller than this
+STRAY_DURATION_SEC = 10    # lone short segments (< this) preceded by large gap are dropped
+STRAY_GAP_SEC = 5          # gap threshold for "lone" check above
 
 
-def frame_histogram(frame, crop_top_fraction=0.75, crop_bottom_fraction=1.0,
-                    crop_left_fraction=0.0, crop_right_fraction=1.0):
-    """Compute L1-normalized HSV histogram of the ticker region."""
-    h, w = frame.shape[:2]
-    top = int(h * crop_top_fraction)
-    bottom = int(h * crop_bottom_fraction)
-    left = int(w * crop_left_fraction)
-    right = int(w * crop_right_fraction)
-    crop = frame[top:bottom, left:right, :]
-    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-    hist = cv2.calcHist([hsv], CHANNELS, None, HIST_SIZE, HIST_RANGES)
-    cv2.normalize(hist, hist, alpha=1.0, beta=0.0, norm_type=cv2.NORM_L1)
-    return hist.flatten().astype(np.float64)
+def frame_features(frame, model):
+    """Extract the pixel values the classifier was trained on."""
+    small = cv2.resize(frame, (model["frame_w"], model["frame_h"]))
+    hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
+    flat = hsv.flatten().astype(np.float32)
+    return flat[model["pixel_indices"]].reshape(1, -1)
 
 
-def chi_square_distance(h1, h2):
-    """Symmetric chi-square distance between two histograms."""
-    denom = h1 + h2 + 1e-10
-    return 0.5 * float(np.sum((h1 - h2) ** 2 / denom))
+def find_segments(video_path, model, threshold=0.5, scan_fps=1):
+    """Scan video and find commercial segments using the trained classifier.
 
-
-def find_segments(video_path, profile, threshold=0.35, scan_fps=1, crop_config=None):
-    """Scan video and find dissimilar (commercial) segments."""
+    The classifier operates on the full frame exactly as it was trained.
+    """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise FileNotFoundError(f"Cannot open video: {video_path}")
@@ -50,16 +40,10 @@ def find_segments(video_path, profile, threshold=0.35, scan_fps=1, crop_config=N
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     step = max(1, round(fps / scan_fps))
 
-    crop_kwargs = {}
-    if crop_config:
-        crop_kwargs = {
-            'crop_top_fraction': crop_config.get('crop_top_fraction', 0.75),
-            'crop_bottom_fraction': crop_config.get('crop_bottom_fraction', 1.0),
-            'crop_left_fraction': crop_config.get('crop_left_fraction', 0.0),
-            'crop_right_fraction': crop_config.get('crop_right_fraction', 1.0),
-        }
+    scaler = model["scaler"]
+    classifier = model["classifier"]
 
-    dissimilar_timestamps = []
+    commercial_timestamps = []
 
     # Use grab()/retrieve() pattern: grab() advances without decoding,
     # retrieve() decodes only frames we need. Much faster for large files.
@@ -73,27 +57,28 @@ def find_segments(video_path, profile, threshold=0.35, scan_fps=1, crop_config=N
             ret, frame = cap.retrieve()
             if ret:
                 timestamp = frame_num / fps
-                hist = frame_histogram(frame, **crop_kwargs)
-                dist = chi_square_distance(hist, profile)
+                feat = frame_features(frame, model)
+                feat_sc = scaler.transform(feat)
+                prob = classifier.predict_proba(feat_sc)[0, 1]
 
-                if dist > threshold:
-                    dissimilar_timestamps.append(timestamp)
+                if prob > threshold:
+                    commercial_timestamps.append(timestamp)
 
         frame_num += 1
 
     video_duration = total_frames / fps
     cap.release()
 
-    if not dissimilar_timestamps:
+    if not commercial_timestamps:
         return [], video_duration
 
     # Group consecutive timestamps into segments
     max_gap = (step / fps) * 2
     segments = []
-    seg_start = dissimilar_timestamps[0]
-    seg_end = dissimilar_timestamps[0]
+    seg_start = commercial_timestamps[0]
+    seg_end = commercial_timestamps[0]
 
-    for ts in dissimilar_timestamps[1:]:
+    for ts in commercial_timestamps[1:]:
         if ts - seg_end <= max_gap:
             seg_end = ts
         else:
@@ -118,26 +103,26 @@ def cleanup(segments, video_duration):
     filtered = []
     for i, seg in enumerate(segments):
         duration = seg["end_time"] - seg["start_time"]
-        if duration < 10:
+        if duration < STRAY_DURATION_SEC:
             if i + 1 < len(segments):
                 gap = segments[i + 1]["start_time"] - seg["end_time"]
-                if gap > 5:
+                if gap > STRAY_GAP_SEC:
                     continue
             else:
                 continue
         filtered.append(seg)
 
-    # Step 2: merge segments less than 10 seconds apart
+    # Step 2: merge segments less than MERGE_GAP_SEC apart
     merged = []
     for seg in filtered:
-        if merged and seg["start_time"] - merged[-1]["end_time"] < 10:
+        if merged and seg["start_time"] - merged[-1]["end_time"] < MERGE_GAP_SEC:
             merged[-1]["end_time"] = seg["end_time"]
             merged[-1]["duration"] = round(merged[-1]["end_time"] - merged[-1]["start_time"], 3)
         else:
             merged.append(dict(seg))
 
-    # Step 3: remove segments shorter than 20 seconds
-    result = [seg for seg in merged if seg["end_time"] - seg["start_time"] >= 20]
+    # Step 3: remove segments shorter than MIN_SEGMENT_SEC
+    result = [seg for seg in merged if seg["end_time"] - seg["start_time"] >= MIN_SEGMENT_SEC]
 
     # Step 4: remove segments within opening/closing margins
     cutoff_end = video_duration - MARGIN_END_SEC

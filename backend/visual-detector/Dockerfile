@@ -9,8 +9,5 @@ RUN pip install --no-cache-dir opencv-python numpy boto3
 # Copy black-frame detector files
 COPY worker.py merger.py launcher.py ${LAMBDA_TASK_ROOT}/
 
-# Copy ticker detector files
-COPY visual_label_detector.py detect_segments.py color_profile_builder.py ${LAMBDA_TASK_ROOT}/
-
-# Default CMD is black-frame worker; label detector uses a separate Lambda definition
+# The model-based detector builds from Dockerfile.model in this same context
 CMD ["worker.handler"]

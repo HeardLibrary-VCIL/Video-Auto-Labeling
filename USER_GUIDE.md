@@ -7,7 +7,7 @@ This guide covers how to use, customize, and extend the pipeline for transcribin
 ## Overview
 
 The pipeline automatically processes videos (.mp4) and produces:
-- **Visual segments** — timestamps where distinct visual transitions occur (e.g., black frames, scene changes)
+- **Visual segments** — commercial/content boundaries found by a trained per-source model, or by black-frame detection as a fallback
 - **Content segments** — classified boundaries with titles, descriptions, and transcripts
 - **Transitions** — filler or bridging segments between primary content
 
@@ -27,7 +27,7 @@ The default project name is `video-autolabeling` (configurable via the `ProjectN
 
 ### Filename Conventions
 
-If your videos follow the `{date}{source}` naming pattern (e.g., `20260101ABC.mp4`), the pipeline can automatically select source-specific detection profiles. Otherwise, the `default` configuration is used.
+Name videos `{date}{source}` (e.g., `20260101ABC.mp4`). The trailing letters are the source ID, and the pipeline uses them to pick that source's trained detection model. A filename with no trailing source ID still processes — it falls back to black-frame detection.
 
 ### Upload via CLI
 
@@ -40,7 +40,7 @@ aws s3 cp /path/to/video.mp4 \
 ### What Happens Automatically
 
 1. Video upload triggers transcription (AWS Transcribe)
-2. Visual segment detection runs (profile-based or black-frame)
+2. Visual segment detection runs (trained model, falling back to black-frame)
 3. Once both transcript + visual results exist → AI segmentation runs
 4. Sub-segment detection (transitions, previews) runs on AI output
 5. Results merger combines everything into `result/{video}.json`
@@ -49,117 +49,218 @@ aws s3 cp /path/to/video.mp4 \
 
 ## Configuration for Visual Detection
 
-### Detection Config
+### How Detection Works
 
-The visual label detector loads a per-source configuration from S3:
+Visual detection has two methods, and the pipeline picks between them per video:
+
+1. **Model-based detection (primary)** — a trained classifier decides, frame by
+   frame, whether the frame is commercial or content. Each source has its own
+   model, selected by the source ID in the filename.
+2. **Black-frame detection (fallback)** — scans for the black frames that many
+   broadcasters insert at segment boundaries, and pairs them into segments.
+
+The pipeline falls back to black-frame detection whenever a model can't be used:
+
+| Situation | Result |
+|-----------|--------|
+| Filename has no source ID | Black-frame detection |
+| Source ID has no entry in the model config | Black-frame detection |
+| Config names a model file that isn't in S3 | Black-frame detection |
+| Model ran but found no segments | Black-frame detection |
+
+Either way the output lands in `segment_results/{video}_segments.json`, so the
+rest of the pipeline behaves identically.
+
+### Model Config
+
+The detector loads a per-source configuration from S3:
 
 ```
-s3://{ProjectName}-videos-{accountId}/config/detection_config.json
+s3://{ProjectName}-videos-{accountId}/config/ticker_network_config.json
 ```
+
+The key is configurable via the `ModelConfigKey` stack parameter.
 
 #### Configuration Format
 
 ```json
 {
-  "default": {
-    "crop_top_fraction": 0.75,
-    "crop_bottom_fraction": 1.0,
-    "crop_left_fraction": 0.0,
-    "crop_right_fraction": 1.0,
-    "chi_square_threshold": 0.35,
-    "scan_fps": 1,
-    "profile_key": "config/profiles/default_profile.npy"
-  },
   "SOURCE_A": {
-    "crop_top_fraction": 0.80,
-    "crop_bottom_fraction": 1.0,
-    "crop_left_fraction": 0.0,
-    "crop_right_fraction": 0.5,
-    "chi_square_threshold": 0.30,
-    "scan_fps": 1,
-    "profile_key": "config/profiles/SOURCE_A_profile.npy"
+    "model_threshold": 0.5,
+    "scan_fps": 0.5,
+    "profile_key": "config/profiles/SOURCE_A_model.pkl"
+  },
+  "SOURCE_B": {
+    "model_threshold": 0.6,
+    "scan_fps": 0.5,
+    "profile_key": "config/profiles/SOURCE_B_model.pkl"
   }
 }
 ```
+
+There is no `default` entry. A source with no entry falls back to black-frame
+detection rather than being scored by another source's model.
 
 #### Parameters
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `crop_top_fraction` | Top of detection region as fraction of frame height (0.0 = top) | 0.75 |
-| `crop_bottom_fraction` | Bottom of detection region as fraction of frame height | 1.0 |
-| `crop_left_fraction` | Left edge of detection region as fraction of frame width | 0.0 |
-| `crop_right_fraction` | Right edge of detection region as fraction of frame width | 1.0 |
-| `chi_square_threshold` | Distance threshold — higher = more sensitive detection | 0.35 |
-| `scan_fps` | Frames sampled per second (1 = one frame per second) | 1 |
-| `profile_key` | S3 key for the source's color profile (.npy file) | — |
+| `model_threshold` | Commercial probability above which a frame counts as commercial (0.0–1.0) | 0.5 |
+| `scan_fps` | Frames sampled per second (0.5 = one frame every two seconds) | 1 |
+| `profile_key` | S3 key for the source's trained model (.pkl file) | `config/profiles/{SOURCE}_model.pkl` |
 
 #### Tuning the Threshold
 
-- **Too few segments detected** → lower the threshold (try 0.25, 0.20)
-- **Too many false positives** → raise the threshold (try 0.40, 0.45)
+- **Too few segments detected** → lower the threshold (try 0.4, 0.3)
+- **Too many false positives** → raise the threshold (try 0.6, 0.7)
 - **Test without redeploying** — update the config JSON in S3 and re-invoke the detector
+
+Post-processing constants (minimum segment length, merge gap, opening and
+closing margins) are at the top of `backend/visual-detector/detect_segments.py`
+and require a redeploy to change.
 
 #### Updating Configuration
 
 ```bash
-aws s3 cp detection_config.json \
-  s3://{ProjectName}-videos-{accountId}/config/detection_config.json \
+aws s3 cp ticker_network_config.json \
+  s3://{ProjectName}-videos-{accountId}/config/ticker_network_config.json \
   --profile <PROFILE>
 ```
 
 ---
 
-## Color Profiles
+## Training Detection Models
 
-Each source/video type needs a precomputed color profile representing what the target visual region looks like during content segments. The detector compares each frame against this profile — frames that deviate significantly are classified as non-content (e.g., commercial breaks, interstitials).
+Each source needs its own model, trained from ground truth on that source's
+video. The trainer learns which *pixel positions* best separate commercial from
+content frames — typically the area where a persistent ticker or logo sits — and
+fits a logistic regression on just those pixels.
 
-### When to Rebuild a Profile
+### When to Retrain
 
 - When visual branding changes for a source
 - When detection accuracy drops for recent videos
 - When adding a new video source
+- When processing archival footage from a different era (a source's 2005
+  graphics are not its 2025 graphics)
 
-### Building a Color Profile
+### 1. Set Up the Training Environment
 
-1. **Prepare ground truth** — create a CSV with labeled segments:
+```bash
+cd train-visual-detector
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+The pinned versions matter. The model is a pickle, and it is loaded by
+`backend/visual-detector/Dockerfile.model`, which installs the same versions.
+Training with a different scikit-learn can produce a model the Lambda cannot
+load, or one that loads and quietly predicts differently. If you change a
+version in one file, change it in the other.
+
+### 2. Prepare Ground Truth
+
+A CSV of labeled segments. Two column layouts are accepted:
 
 ```csv
 Filename,SegmentType,BeginTime,EndTime
-20260101SOURCE,content,300,996
-20260101SOURCE,commercial,996,1087
-20260101SOURCE,content,1087,1465
+20260101SOURCE,c,996,1087
+20260101SOURCE,n,1087,1465
 ```
 
-Segment types should match your pipeline's configured types (e.g., `content`, `commercial`, `transition`).
-
-2. **Place videos locally** — the videos referenced in the CSV must be accessible
-
-3. **Run the profile builder**:
-
-```bash
-cd backend/visual-detector
-python3 color_profile_builder.py
+```csv
+file,segment_type,segment_start,segment_end
+20260101SOURCE,c,996,1087
+20260101SOURCE,n,1087,1465
 ```
 
-Update `CSV_PATH` and `VIDEO_DIR` at the top of the script before running.
+Two things to get right:
 
-4. **Upload the profile to S3**:
+- **`c` marks commercials.** Every other segment type is treated as
+  non-commercial. The labels must include both, or training fails.
+- **Times are frame numbers by default.** Pass `--time-unit seconds` if yours
+  are seconds.
+
+The trainer locates each video as `{first 8 characters of the filename column}{network}.mp4`
+inside the videos directory — so a CSV row of `20260101SOURCE` with
+`--network SOURCE` looks for `20260101SOURCE.mp4`.
+
+### 3. Train
+
+Videos referenced by the CSV must be on local disk.
 
 ```bash
-aws s3 cp color_profile.npy \
-  s3://{ProjectName}-videos-{accountId}/config/profiles/{SOURCE}_profile.npy \
+python3 train_model.py \
+  --csv ground_truth/SOURCE_ground_truth.csv \
+  --videos /path/to/videos \
+  --network SOURCE \
+  --output SOURCE_model.pkl
+```
+
+Useful options:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--time-unit` | `frames` or `seconds`, matching your CSV | `frames` |
+| `--frame-size` | Resolution frames are reduced to before scoring, as WxH | `64x36` |
+| `--top-k` | How many of the most informative pixel channels the classifier uses | `500` |
+| `--output` | Output model path | `commercial_model.pkl` |
+
+**Name the output `{SOURCE}_model.pkl`** to match the convention the pipeline
+expects. The default output name is generic and will not be found by the
+detector's fallback key.
+
+Training prints its accuracy and writes an importance map next to the model
+(`SOURCE_model.pkl` → `SOURCE_model_importance.png`) — a three-panel image
+showing a reference frame, the pixels the model relies on, and the two overlaid. Check it: the hot regions should sit on the
+persistent on-screen graphic. If they're scattered across the whole frame, the
+model has latched onto something incidental and will generalize poorly.
+
+### 4. Upload the Model
+
+Model files go in the `config/profiles/` prefix of the video bucket:
+
+```bash
+aws s3 cp SOURCE_model.pkl \
+  s3://{ProjectName}-videos-{accountId}/config/profiles/SOURCE_model.pkl \
   --profile <PROFILE>
 ```
 
-5. **Update the detection config** to reference the new profile key.
+Anything that can write to `config/profiles/` can run code inside the detector
+Lambda, because loading a model unpickles it. Restrict write access to that
+prefix accordingly.
 
-### Adding a New Source
+### 5. Add the Source to the Config
 
-1. Build a color profile from ground truth videos
-2. Upload the profile to `config/profiles/{SOURCE}_profile.npy`
-3. Add the source entry to `detection_config.json`
-4. Pipeline will automatically use the new config on next video upload matching that source identifier
+```json
+{
+  "SOURCE": {
+    "model_threshold": 0.5,
+    "scan_fps": 0.5,
+    "profile_key": "config/profiles/SOURCE_model.pkl"
+  }
+}
+```
+
+Upload it as shown in [Updating Configuration](#updating-configuration). The
+next video whose filename ends in that source ID uses the model — no redeploy
+needed.
+
+### 6. Test the Model
+
+```bash
+aws lambda invoke \
+  --function-name {ProjectName}-transition-detector-prod \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"s3_bucket":"{ProjectName}-videos-{accountId}","s3_key":"video/MY_VIDEO.mp4","video_name":"MY_VIDEO"}' \
+  /tmp/model_test.json && cat /tmp/model_test.json
+```
+
+Read the response:
+
+- `segments_count` above zero — the model worked.
+- `"fallback": "black-frame"` — no usable model. The `message` field says
+  which of the four fallback conditions was hit.
 
 ---
 
@@ -358,8 +459,8 @@ s3://{ProjectName}-videos-{accountId}/result/{video}.json
 | `video/` | Source video files (.mp4) |
 | `segment_results/` | Visual detection output per video |
 | `result/` | Final merged JSON for frontend |
-| `config/detection_config.json` | Visual detector configuration |
-| `config/profiles/` | Color profile .npy files |
+| `config/ticker_network_config.json` | Per-source model configuration |
+| `config/profiles/` | Trained detection models (`{SOURCE}_model.pkl`) |
 
 | Bucket | Purpose |
 |--------|---------|
@@ -376,7 +477,8 @@ s3://{ProjectName}-videos-{accountId}/result/{video}.json
 |---------|-------|
 | No results after upload | CloudWatch logs for the dispatcher Lambda |
 | AI segmentation not triggering | Readiness checker — both transcript and visual results must exist |
-| Poor segment detection | Tune `chi_square_threshold` in detection config |
-| Wrong segments detected | Rebuild color profile with current ground truth |
+| Poor segment detection | Tune `model_threshold` in the model config |
+| Wrong segments detected | Retrain the source's model with current ground truth |
+| Black-frame results when a model was expected | Check the detector's `message` field and CloudWatch logs — usually a missing `.pkl` or config entry |
 | Transcription errors | Add terms to custom vocabulary |
 | Frontend not updating | Check Amplify sync Lambda logs; verify `result/` prefix triggers |

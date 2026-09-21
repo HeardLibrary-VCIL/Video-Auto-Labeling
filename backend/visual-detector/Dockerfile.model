@@ -1,0 +1,18 @@
+FROM --platform=linux/arm64 public.ecr.aws/lambda/python:3.13
+
+# Install system libraries needed by full opencv-python
+RUN dnf install -y mesa-libGL glib2 2>/dev/null || true
+
+# scikit-learn is required to unpickle the trained scaler/classifier.
+# These versions must match train-visual-detector/requirements.txt: unpickling
+# across scikit-learn versions can fail or silently change predictions, and a
+# different OpenCV can resize frames differently than training did.
+RUN pip install --no-cache-dir \
+      opencv-python==4.14.0.94 \
+      numpy==2.5.3 \
+      scikit-learn==1.9.1 \
+      boto3
+
+COPY handler.py detect_segments.py ${LAMBDA_TASK_ROOT}/
+
+CMD ["handler.handler"]

@@ -8,7 +8,9 @@ The pipeline has two processing tracks. Track B only fires when **both** tracks'
 
 ```
 TRACK A — Visual Segment Detection (video only, no transcripts needed):
-  Videos uploaded → Visual Detector → segment_results/
+  Videos uploaded → Visual Detector (trained model per source)
+                    ↳ no model for that source? → Black-Frame Detector
+                    → segment_results/
 
 TRACK B — AI Segmentation (requires BOTH transcript AND visual detection output):
   Video uploaded → [auto] Transcription (AWS Transcribe)
@@ -26,8 +28,8 @@ Final output: result/{video}.json → Amplify Frontend
 | Component | What It Does | Trigger |
 |-----------|-------------|---------|
 | **Transcription** | Generates word-level transcript via AWS Transcribe | S3 event (video upload) |
-| **Visual Detector** | Black frame / profile-based segment detection | S3 event or batch invocation |
-| **Transition Detector** | Profile-based detection (alternative method) | Dispatcher routing |
+| **Visual Detector (model-based)** | Classifies frames with a trained per-source model | Dispatcher routing (S3 event) |
+| **Black-Frame Detector** | Fallback detection via black frames; Step Functions fan-out | Invoked by the model detector, or batch invocation |
 | **Readiness Checker** | Waits for both transcript + segment results | S3 event (transcript OR segment result arrives) |
 | **AI Segmentation** | LLM classifies content segments from transcripts | Invoked by Readiness Checker |
 | **Sub-Segment Detector** | Merges visual + AI segments, detects transitions | S3 event (`ai_results/` in processing bucket) |
@@ -40,6 +42,7 @@ Final output: result/{video}.json → Amplify Frontend
 - AWS CLI configured with target account profile
 - SAM CLI installed
 - Docker Desktop running (for visual detector Lambda builds)
+- Trained detection models, if using model-based detection (see [USER_GUIDE.md](USER_GUIDE.md#training-detection-models))
 - Node.js 20+ and npm
 
 ### AWS Account Requirements
@@ -261,8 +264,8 @@ am deploy \
 | `{ProjectName}-transcriptions-{accountId}` | S3 — transcription output |
 | `{ProjectName}-processing-{accountId}` | S3 — intermediate AI results |
 | `{ProjectName}-vocabulary-{accountId}` | S3 — custom Transcribe vocabulary |
-| Visual Detector (Worker/Merger/Launcher) | Docker Lambdas — black frame detection |
-| Transition Detector | Docker Lambda — profile-based detection |
+| Visual Detector (Worker/Merger/Launcher) | Docker Lambdas — black-frame fallback detection |
+| Visual Detector (model-based) | Docker Lambda — primary, model-based detection |
 | AI Segmentation | Python Lambda — LLM classification |
 | Sub-Segment Detector | Python Lambda — transition detection |
 | Results Merger | Python Lambda — combines all outputs |
@@ -462,132 +465,90 @@ The dispatcher triggers the ground truth converter, which parses clip boundaries
 
 ---
 
-## Optional: Color Profile Creation (Transition/Ticker Detection)
+## Detection Models (Model-Based Visual Detection)
 
-Color profiles enable the transition detector to identify segment boundaries by visual appearance. Each video source needs its own profile that represents "what the content region looks like during primary content." Frames that deviate from the profile are classified as non-content (breaks/commercials).
+The visual detector classifies each sampled frame with a trained per-source model, selected from the source ID at the end of the video filename. If no usable model exists for a video, the detector hands it to the black-frame detector instead, so the pipeline still produces `segment_results/`.
 
-### Prerequisites
+Training is a local, offline step. **Full instructions are in [USER_GUIDE.md](USER_GUIDE.md#training-detection-models)** — this section covers only what deployment needs.
 
-```bash
-# Set up a local Python environment with OpenCV
-python3 -m venv .venv
-source .venv/bin/activate
-pip install opencv-python numpy
-```
+### What the Stack Expects in S3
 
-You also need:
-- Ground truth CSV for the target source (uploaded to processing bucket)
-- At least one video file from that source accessible locally
+| Location | Contents |
+|----------|----------|
+| `config/profiles/{SOURCE}_model.pkl` | One trained model per source |
+| `config/ticker_network_config.json` | Per-source threshold, scan rate, and model key |
 
-### 1. Prepare Ground Truth
+The config key is set by the `ModelConfigKey` stack parameter.
 
-The profile builder reads from a CSV with these columns:
-
-```csv
-file,segment_type,segment_start,segment_end,segment_transcript
-20260402CNN,n,3620,13313,""
-20260402CNN,c,13313,18500,""
-20260402CNN,n,18500,25032,""
-```
-
-It uses segments of type `n`, `p`, `t`, `g` (non-commercial) to build the profile — these are the frames where the ticker/overlay IS visible.
-
-### 2. Configure and Run the Profile Builder
-
-Edit `ColorProfile.py` before running:
-
-```python
-CSV_PATH = "ground_truth/cnn_ground_truth.csv"   # path to your ground truth
-VIDEO_DIR = "cnn_videos"                          # directory containing video files
-TARGET_TYPES = {"p", "n", "t", "g"}              # segment types to include in profile
-```
-
-The `filename` construction in `load_segments()` may need adjustment for your naming convention. By default it takes the first 8 chars of the `file` column and appends the network suffix.
+### Deploying a Model
 
 ```bash
-cd backend/visual-detector   # or wherever ColorProfile.py lives
-python3 ColorProfile.py
-```
-
-Output: `color_profile.npy`
-
-### 3. Upload Profile to S3
-
-```bash
-aws s3 cp color_profile.npy \
-  s3://{ProjectName}-videos-{accountId}/config/profiles/{SOURCE}_profile.npy \
+# 1. Upload the trained model
+aws s3 cp SOURCE_A_model.pkl \
+  s3://{ProjectName}-videos-{accountId}/config/profiles/SOURCE_A_model.pkl \
   --profile <PROFILE>
-```
 
-Example:
-```bash
-aws s3 cp color_profile.npy s3://tvnews-videos-253223147348/config/profiles/CNN_profile.npy --profile vcil
-```
-
-### 4. Configure Detection Settings
-
-Upload or update the detection config JSON:
-
-```bash
-aws s3 cp - s3://{ProjectName}-videos-{accountId}/config/detection_config.json \
+# 2. Register the source in the config
+aws s3 cp - s3://{ProjectName}-videos-{accountId}/config/ticker_network_config.json \
   --content-type application/json --profile <PROFILE> <<'EOF'
 {
-  "CNN": {
-    "crop_top_fraction": 0.75,
-    "crop_bottom_fraction": 1.0,
-    "crop_left_fraction": 0.0,
-    "crop_right_fraction": 1.0,
-    "chi_square_threshold": 0.35,
+  "SOURCE_A": {
+    "model_threshold": 0.5,
     "scan_fps": 0.5,
-    "profile_key": "config/profiles/CNN_profile.npy"
+    "profile_key": "config/profiles/SOURCE_A_model.pkl"
   },
-  "FNC": {
-    "crop_top_fraction": 0.75,
-    "crop_bottom_fraction": 1.0,
-    "crop_left_fraction": 0.0,
-    "crop_right_fraction": 1.0,
-    "chi_square_threshold": 0.35,
+  "SOURCE_B": {
+    "model_threshold": 0.5,
     "scan_fps": 0.5,
-    "profile_key": "config/profiles/FNC_profile.npy"
+    "profile_key": "config/profiles/SOURCE_B_model.pkl"
   }
 }
 EOF
 ```
 
+Neither step requires a redeploy — the detector reads both on every invocation.
+
 ### Configuration Parameters
 
 | Parameter | Description | Tuning |
 |-----------|-------------|--------|
-| `crop_top_fraction` | Top of detection region (0.0=top of frame) | Set to where the persistent overlay starts |
-| `crop_bottom_fraction` | Bottom of detection region (1.0=bottom) | Usually 1.0 for tickers |
-| `crop_left_fraction` | Left edge (0.0=left) | Narrow to focus on specific overlay area |
-| `crop_right_fraction` | Right edge (1.0=right) | Narrow to exclude non-informative areas |
-| `chi_square_threshold` | Sensitivity (higher=more detections) | Start at 0.35, lower if too many false positives |
-| `scan_fps` | Frames sampled per second | 0.5 for large videos, 1.0 for shorter ones |
-| `profile_key` | S3 key for the .npy profile | Must match the uploaded profile path |
+| `model_threshold` | Commercial probability above which a frame counts as commercial | Start at 0.5; lower for more detections, raise to cut false positives |
+| `scan_fps` | Frames sampled per second | 0.5 for hour-long videos, 1.0 for shorter ones |
+| `profile_key` | S3 key of the source's `.pkl` model | Must match the uploaded path |
 
-### 5. When to Rebuild a Profile
+### Keeping Training and Runtime in Sync
 
-- Network updates their visual branding/ticker graphics
+Models are pickled scikit-learn objects. The training environment (`train-visual-detector/requirements.txt`) and the Lambda image (`backend/visual-detector/Dockerfile.model`) pin the same versions of scikit-learn, NumPy, and OpenCV. **Change one, change the other** — a mismatch can fail to unpickle, or load and silently predict differently.
+
+Because loading a model unpickles it, write access to `config/profiles/` amounts to code execution inside the detector Lambda. Restrict it accordingly.
+
+### When to Retrain
+
+- The source changes its on-screen branding or graphics
 - Detection accuracy drops on recent videos
-- Adding a new video source
-- Processing archival footage from a different era (the same network's 2005 graphics ≠ 2025 graphics)
+- You add a new video source
+- You start processing archival footage from a different era
 
-### 6. Testing a Profile
-
-After uploading, invoke the transition detector directly to test:
+### Testing a Model
 
 ```bash
 aws lambda invoke \
   --function-name {ProjectName}-transition-detector-prod \
   --cli-binary-format raw-in-base64-out \
   --payload '{"s3_bucket":"{ProjectName}-videos-{accountId}","s3_key":"video/MY_VIDEO.mp4","video_name":"MY_VIDEO"}' \
-  /tmp/ticker_test.json && cat /tmp/ticker_test.json
+  /tmp/model_test.json && cat /tmp/model_test.json
 ```
 
-Check the `segments_count` in the response. If 0 segments detected, the profile likely doesn't match — try lowering the threshold or rebuilding from more representative ground truth.
+Reading the response:
+
+- `segments_count` above zero — the model ran and detected segments.
+- `"fallback": "black-frame"` — no usable model was found; the `message` field names the reason (no source ID in the filename, no config entry, or a missing `.pkl`).
+- `segments_count: 0` with an `error` field — no usable model *and* no black-frame launcher configured.
+
+If the model runs but detects nothing on video you know contains commercials, lower `model_threshold` or retrain from more representative ground truth.
 
 ---
+
 
 ## Manual Pipeline Invocation
 
@@ -657,7 +618,9 @@ INPUTS:
   s3://{ProjectName}-videos-{accountId}/video/     ← source videos (.mp4)
 
 TRACK A — Visual Segment Detection:
-  Video upload → Dispatcher → Visual Detector (Step Functions)
+  Video upload → Dispatcher → Visual Detector (trained model for the source)
+                              ↳ no usable model, or 0 segments found?
+                                → Black-Frame Detector (Step Functions fan-out)
   Output: s3://{ProjectName}-videos-{accountId}/segment_results/{video}_segments.json
     → [auto] Readiness Checker
 
@@ -698,6 +661,7 @@ FRONTEND:
 - [ ] Upload test video → check dispatcher logs
 - [ ] Transcription completes → check transcription bucket
 - [ ] Visual detection runs → check `segment_results/`
+- [ ] Detector used the model, not the fallback → check its logs for `falling back to black-frame`
 - [ ] AI Segmentation triggers → check `ai_results/`
 - [ ] Final results appear in `result/`
 - [ ] Frontend loads and displays segments
@@ -894,6 +858,9 @@ To add a segment type (e.g., "interview") to the existing single-pass pipeline:
 | Readiness Checker not triggering | Verify both transcript AND segment_results exist. Check filename extraction logic in logs |
 | Amplify deploy fails | Use `npm install` not `npm ci`. Pin CDK dependencies |
 | pydantic_core import error | Rebuild layer with `--use-container`. Verify `.so` files show `aarch64` |
+| Detector always falls back to black-frame | Check its logs for the reason: filename has no source ID, no entry in `ticker_network_config.json`, or `profile_key` points at a `.pkl` that isn't in S3 |
+| Model fails to unpickle | scikit-learn version mismatch. `train-visual-detector/requirements.txt` and `backend/visual-detector/Dockerfile.model` must pin the same version |
+| Model detects far too much or too little | Tune `model_threshold` in the config — no redeploy needed. If tuning doesn't help, retrain and check the importance map |
 
 ---
 

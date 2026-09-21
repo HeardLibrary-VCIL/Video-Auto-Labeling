@@ -52,7 +52,7 @@
           <div class="feature-card">
             <div class="feature-icon">🔍</div>
             <h3>Visual Boundary Detection</h3>
-            <p>Multiple detection methods: black frame analysis, color profile matching, or custom approaches — configurable per video source.</p>
+            <p>A trained per-source model classifies frames as commercial or content, with black-frame analysis as an automatic fallback — configurable per video source.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">🧩</div>
@@ -74,7 +74,8 @@
     <section id="algorithm" class="section">
       <div class="container">
         <h2>Visual Data Algorithms</h2>
-        <h2>Black-frames</h2>
+        <h2>Black-frames (Fallback Method)</h2>
+        <p>Used when no trained model is available for a video's source, or when the model finds nothing. Black frames inserted at segment boundaries are detected, then paired into segments.</p>
         <div class="algo-section">
           <h3>Step 1: Black Frame Detection (Worker)</h3>
           <p>Each 60-second chunk is analyzed for black frame runs using color histogram comparison:</p>
@@ -127,88 +128,88 @@
       </div>
     </section>
 
-    <!-- Alternate Visual Detection Section -->
+    <!-- Model-Based Visual Detection Section -->
     <section id="ticker" class="section section-alt">
       <div class="container">
-        <h2>Transition Detection (Profile-Based)</h2>
-        <p>An alternative visual detection method for videos that don't have reliable black frames between segments. Instead of looking for black frames, this approach detects the <strong>absence of a persistent visual element</strong> (such as a ticker, logo, or overlay) by comparing frame regions against a precomputed color profile.</p>
+        <h2>Model-Based Detection (Primary Method)</h2>
+        <p>The primary visual detection method, used for videos that don't have reliable black frames between segments. Instead of looking for black frames, a <strong>trained classifier</strong> decides frame by frame whether the frame is commercial or content — typically by learning the pixels where a persistent ticker, logo, or overlay sits. Each video source gets its own model.</p>
         <div class="feature-grid">
           <div class="feature-card">
-            <div class="feature-icon">📊</div>
-            <h3>Color Profile Matching</h3>
-            <p>A precomputed HSV color histogram captures what a target region looks like during primary content. Each frame is compared against this profile using chi-squared distance.</p>
+            <div class="feature-icon">🧠</div>
+            <h3>Trained Per Source</h3>
+            <p>A logistic regression trained on ground-truth-labeled video from that source, stored as a pickled model in S3 and selected by the source ID in the filename.</p>
           </div>
           <div class="feature-card">
-            <div class="feature-icon">✂️</div>
-            <h3>Region Cropping</h3>
-            <p>Only the target region of each frame is analyzed (configurable crop boundaries), making detection fast and focused on the most informative pixels.</p>
+            <div class="feature-icon">🎯</div>
+            <h3>Learns Where to Look</h3>
+            <p>Training ranks every pixel channel by how reliably it tells commercial from content, then keeps only the few hundred that rank highest — so classifying a frame is cheap.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">⚡</div>
             <h3>Single-Pass Scan</h3>
-            <p>Processes the entire video in one pass at configurable frame rate (0.5–1 fps), grouping consecutive dissimilar frames into segments.</p>
+            <p>Processes the entire video in one pass at configurable frame rate (0.5–1 fps), grouping consecutive commercial frames into segments.</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">🔄</div>
             <h3>Automatic Fallback</h3>
-            <p>If profile-based detection finds zero segments (profile mismatch, different era), the system automatically falls back to the black-frame method.</p>
+            <p>If no model exists for the source, or the model finds zero segments, the system automatically falls back to the black-frame method.</p>
           </div>
         </div>
 
         <div class="algo-section">
           <h3>How It Works</h3>
           <div class="code-block">
-            <pre><code>1. Crop each frame to the target region (e.g., bottom 25% of frame)
-2. Convert to HSV and compute a 36×32×32 bin histogram
-3. L1-normalize the histogram
-4. Compare against the precomputed color profile using chi-squared distance
-5. If distance > threshold → frame is "dissimilar" (non-content segment)
-6. Group consecutive dissimilar frames into segments
-7. Filter: remove short bursts (&lt;10s), merge nearby segments (&lt;60s gap)
+            <pre><code>1. Sample frames at the configured scan rate (0.5–1 fps)
+2. Resize each frame to the model's training resolution (default 64×36) and convert to HSV
+3. Read only the pixel positions the model selected during training
+4. Scale those values and score them → commercial probability
+5. If probability > threshold → frame is commercial
+6. Group consecutive commercial frames into segments
+7. Filter: drop strays (&lt;10s), merge nearby segments (&lt;10s gap), drop segments &lt;20s
 8. Skip configurable margin at start and end</code></pre>
           </div>
         </div>
 
         <div class="algo-section">
           <h3>Per-Source Configuration</h3>
-          <p>Each video source has its own detection profile stored in S3, configured via a JSON file:</p>
+          <p>Each video source has its own model and settings stored in S3, configured via a JSON file:</p>
           <div class="code-block">
             <pre><code>{
   "SOURCE_A": {
-    "crop_top_fraction": 0.75,     // Top of target region (75% down)
-    "crop_bottom_fraction": 1.0,   // Bottom of target region (100%)
-    "crop_left_fraction": 0.0,     // Full width
-    "crop_right_fraction": 1.0,
-    "chi_square_threshold": 0.35,  // Sensitivity
+    "model_threshold": 0.5,        // Commercial probability cutoff
     "scan_fps": 0.5,               // Frames per second to sample
-    "profile_key": "config/profiles/SOURCE_A_profile.npy"
+    "profile_key": "config/profiles/SOURCE_A_model.pkl"
   }
 }</code></pre>
           </div>
-          <p>Threshold tuning: lower = fewer detections (less sensitive), higher = more detections (more false positives). The profile must match the era and visual style of the video content.</p>
+          <p>Threshold tuning: lower = more detections (more false positives), higher = fewer detections. A source with no entry here falls back to black-frame detection rather than being scored by another source's model. The model must match the era and visual style of the video content.</p>
         </div>
 
         <div class="algo-section">
-          <h3>Building a Color Profile</h3>
-          <p>Profiles are built from ground-truth-labeled videos. The profile builder:</p>
+          <h3>Training a Model</h3>
+          <p>Models are trained offline from ground-truth-labeled videos. The trainer:</p>
           <div class="code-block">
-            <pre><code>1. Load ground truth CSV with labeled segments (content vs non-content)
-2. For each "content" segment, extract frames from the target region
-3. Compute HSV histograms for all content frames
-4. Average all histograms into a single representative profile
-5. Save as .npy file → upload to S3</code></pre>
+            <pre><code>1. Load ground truth CSV with labeled segments (commercial vs content)
+2. Sample frames at 1 fps from each labeled segment, resize and convert to HSV
+3. Score every pixel channel by Fisher criterion:
+     (mean_commercial - mean_content)² / (var_commercial + var_content)
+4. Keep the ~500 pixel channels with the highest scores
+5. Fit a logistic regression on just those pixels
+6. Save as .pkl → upload to S3</code></pre>
           </div>
-          <p>The resulting profile represents "what the target region looks like during primary content." Frames that deviate significantly from this profile are classified as non-content segments.</p>
+          <p>Training also writes an importance map image showing which pixels the model relies on, overlaid on a real frame — a quick way to confirm it locked onto the persistent graphic rather than something incidental.</p>
         </div>
 
         <div class="algo-section">
           <h3>Detection Routing</h3>
-          <p>The video dispatcher automatically selects the detection method based on the video source:</p>
+          <p>The video dispatcher sends every video to the model-based detector, which decides whether it can handle it:</p>
           <div class="code-block">
-            <pre><code>Video uploaded → Dispatcher extracts source ID from filename
-  → If source has a detection profile configured → Profile-Based Detection
-    → If 0 segments found → Fallback to Black-Frame Detection
-  → Otherwise → Black-Frame Detection (default)</code></pre>
+            <pre><code>Video uploaded → Dispatcher → Model-Based Detection
+  → No source ID in filename        → Black-Frame Detection
+  → No model configured for source   → Black-Frame Detection
+  → Model file missing from S3       → Black-Frame Detection
+  → Model ran, found 0 segments      → Black-Frame Detection
+  → Otherwise → segments written directly</code></pre>
           </div>
         </div>
       </div>
